@@ -37,7 +37,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - 8080:8080
+      - 8747:8747
     environment:
       - DOCKER_MCP=http://mcp-gateway:9011
       - BRAVE_API_KEY=${BRAVE_API_KEY}
@@ -53,4 +53,3 @@ services:
 secrets:
   mcp_secret:
     file: ./.mcp.env
-

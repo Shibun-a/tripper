@@ -3,7 +3,7 @@
 #./scripts/support/check_env.sh
 
 
-echo "Running web profile: go to http://localhost:8080"
+echo "Running web profile: go to http://localhost:8747"
 
 #export SPRING_PROFILES_ACTIVE=neo
-mvn -Dmaven.test.skip=true spring-boot:run
+./mvnw -Dmaven.test.skip=true spring-boot:run

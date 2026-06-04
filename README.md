@@ -43,6 +43,17 @@ It demonstrates the power of the [Embabel agent framework](https://www.github.co
 </tr>
 </table>
 
+## Portfolio Extension Note
+
+This fork starts from the open-source Embabel Tripper project. The current goal is to turn the baseline demo into a stronger AI application portfolio project by adding reproducibility, architecture documentation, tests, and later RAG/evaluation/observability features.
+
+Personal extension docs:
+
+- [Project Note](PROJECT-NOTE.md)
+- [Local Development Guide](LOCAL-DEVELOPMENT.md)
+- [Architecture Guide](infra.md)
+- [AI Application Plan](README-AI-APPLICATION-PLAN.md)
+
 ## 🚀 Quick Start
 
 > Warning: Tripper is a genuinely useful travel planner. But be aware that its extensive LLM usage will cost money. A
@@ -51,20 +62,29 @@ It demonstrates the power of the [Embabel agent framework](https://www.github.co
 ### Prerequisites
 
 - Java 21+
-- Docker
-- Maven 3.6+
-- Make sure you have 'Docker Model Runner' up and running and exposed on port 12434 (
-  ```docker desktop enable model-runner --tcp=12434```)
+- Docker Desktop, if you want MCP tools or Docker-based local services
+- Maven is optional. This repository includes Maven Wrapper, so use `./mvnw`.
+- Docker Model Runner is only needed if you use the Docker Model Runner compose file:
+  ```bash
+  docker desktop enable model-runner --tcp=12434
+  ```
 
 ### Environment Setup
 
 1. **Configure API Keys**
    ```bash
    export OPENAI_API_KEY=your_openai_api_key_here
-   export ANTHROPIC_API_KEY=your_anthropic_api_key_here
    # Set your Brave API key for image search
    export BRAVE_API_KEY=your_brave_api_key_here
- 
+   ```
+
+   For a homepage-only smoke test, non-empty dummy values are enough. A real planning run requires valid keys.
+
+   ```bash
+   export OPENAI_API_KEY=dummy
+   export BRAVE_API_KEY=dummy
+   export GOOGLE_CLIENT_ID=dummy
+   export GOOGLE_CLIENT_SECRET=dummy
    ```
 
 2. **Set MCP Environment variables** for MCP tools running in Docker
@@ -78,9 +98,9 @@ It demonstrates the power of the [Embabel agent framework](https://www.github.co
 
 ### Running the Application
 
-1. **Start Background Services**
+1. **Start Background Services** (optional, needed for MCP tool-backed runs)
    ```bash
-   docker compose --file compose.yaml --file compose.dmr.yaml up
+   docker compose up mcp-gateway zipkin
    ```
 
 2. **Launch the Travel Planner**
@@ -90,34 +110,39 @@ It demonstrates the power of the [Embabel agent framework](https://www.github.co
    ./run.sh
    ```
 
-   **Option B: Using IDE**
+   **Option B: Using Maven Wrapper**
+   ```bash
+   ./mvnw -Dmaven.test.skip=true spring-boot:run
+   ```
+
+   **Option C: Using IDE**
     - Open the project in your IDE
     - Run it in the way your IDE runs Spring Boot apps. In IntelliJ IDEA, simply run the main method in
       `TripperApplication.kt`.
 
 3. **Access the Application**
-    - Travel Planner: [http://localhost:8080/](http://localhost:8080/)
-    - Platform Info: [http://localhost:8080/platform](http://localhost:8080/platform)
+    - Travel Planner: [http://localhost:8747/](http://localhost:8747/)
+    - Platform Info: [http://localhost:8747/platform](http://localhost:8747/platform)
 
 ### Running the Application with Docker
 
 1. **Launch the Travel Planner**
    ```bash
-   docker compose --profile in-docker up
+   docker compose --profile in-docker up --build
    ```
 
 2. **Access the Application**
-    - Travel Planner: [http://localhost:8747/](http://localhost:8080/)
-    - Platform Info: [http://localhost:8747/platform](http://localhost:8080/platform)
+    - Travel Planner: [http://localhost:8747/](http://localhost:8747/)
+    - Platform Info: [http://localhost:8747/platform](http://localhost:8747/platform)
 
 > Note that the default port is `8747` not the usual Java `8080`. This is because
 > we often run multiple Embabel servers at once and don't want them to conflict.
 > The specific port is a reference to an [iconic aircraft](https://en.wikipedia.org/wiki/Boeing_747).
-> It's easy to change the port in `application.properties`.
+> It's easy to change the port in `application.yml`.
 
 ### Setup OAuth Credentials
 
-Enable security by changing the following line in `application.properties`:
+Enable security by changing the following line in `application.yml`:
 
 ```properties
 embabel.security.enabled=true
@@ -207,7 +232,7 @@ The Tripper agent follows a modern microservices architecture:
 
 - **Backend**: Kotlin, Embabel, Spring Boot, Apache Tomcat
 - **Frontend**: htmx, JSON APIs
-- **Build**: Apache Maven
+- **Build**: Apache Maven Wrapper
 - **DevOps**: Docker, GitHub Actions
 
 ### Note For Linux Developers

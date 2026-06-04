@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{common/layout :: layout(~{::title}, ~{::section})}">
+<head>
+    <title>Travel Knowledge Base</title>
+</head>
+<body>
+<section>
+    <h2>Travel Knowledge Base</h2>
+
+    <p>
+        <a href="/travel/journey">Back to planner</a>
+        |
+        <a href="/knowledge/debug">Retrieval debug</a>
+    </p>
+
+    <p th:if="${message != null}" th:text="${message}"></p>
+
+    <h3>Add Text</h3>
+    <form action="/knowledge/text" method="post">
+        <div class="form-group">
+            <label for="text-title">Title</label>
+            <input id="text-title" name="title" type="text" required placeholder="Bordeaux wine notes">
+        </div>
+        <div class="form-group">
+            <label for="content">Content</label>
+            <textarea id="content" name="content" rows="8" required
+                      placeholder="Paste travel notes, policy text, itinerary constraints, or destination research."></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Text</button>
+    </form>
+
+    <h3>Upload Text File</h3>
+    <form action="/knowledge/upload" method="post" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="file-title">Title</label>
+            <input id="file-title" name="title" type="text" placeholder="Optional display title">
+        </div>
+        <div class="form-group">
+            <label for="file">File</label>
+            <input id="file" name="file" type="file" accept=".txt,.md,.text" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Upload File</button>
+    </form>
+
+    <h3>Import URL</h3>
+    <form action="/knowledge/url" method="post">
+        <div class="form-group">
+            <label for="url-title">Title</label>
+            <input id="url-title" name="title" type="text" placeholder="Optional display title">
+        </div>
+        <div class="form-group">
+            <label for="url">URL</label>
+            <input id="url" name="url" type="url" required placeholder="https://example.com/travel-guide">
+        </div>
+        <button type="submit" class="btn btn-primary">Import URL</button>
+    </form>
+
+    <h3>Indexed Documents</h3>
+    <div th:if="${#lists.isEmpty(documents)}">
+        <p>No travel knowledge has been indexed yet.</p>
+    </div>
+    <ul th:if="${!#lists.isEmpty(documents)}">
+        <li th:each="document : ${documents}">
+            <strong th:text="${document.title}"></strong>
+            <span th:text="'(' + ${document.sourceType} + ')'"></span>
+            <p th:text="${document.summary}"></p>
+            <small th:text="${document.source}"></small>
+        </li>
+    </ul>
+
+    <form action="/knowledge/clear" method="post" th:if="${!#lists.isEmpty(documents)}">
+        <button type="submit" class="btn">Clear Knowledge Base</button>
+    </form>
+</section>
+</body>
+</html>

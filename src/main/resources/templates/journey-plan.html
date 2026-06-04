@@ -42,6 +42,19 @@
             </div>
 
             <div th:utext="${travelPlan.proposal.plan}" style="margin-bottom: 1rem;"></div>
+
+            <div th:if="${travelPlan.knowledgeContext != null && travelPlan.knowledgeContext.hasHits}">
+                <h3>Knowledge Sources Used</h3>
+                <ol>
+                    <li th:each="hit : ${travelPlan.knowledgeContext.hits}" style="margin-bottom: 0.5rem;">
+                        <strong th:text="${hit.citationId}"></strong>
+                        <span th:text="' score=' + ${#numbers.formatDecimal(hit.score, 1, 3)}"></span>
+                        <p th:text="${hit.text}"></p>
+                        <small th:text="${hit.source}"></small>
+                    </li>
+                </ol>
+            </div>
+
             <h3>Stays</h3>
             <ul style="margin-bottom: 1rem;">
                 <li th:each="stay : ${travelPlan.stays}" style="margin-bottom: 0.5rem;">

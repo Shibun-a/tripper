@@ -16,10 +16,14 @@
 package com.embabel.example.travel.agent
 
 import com.embabel.tripper.agent.Day
+import com.embabel.tripper.agent.JourneyTravelBrief
 import com.embabel.tripper.agent.ProposedTravelPlan
+import com.embabel.tripper.agent.TravelPlan
+import com.embabel.tripper.agent.Travelers
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
+import kotlin.test.assertEquals
 
 class TravelPlanTest {
 
@@ -27,23 +31,46 @@ class TravelPlanTest {
     inner class Mapping {
 
         @Test
-        fun `one day only`() {
-            val travelPlan = ProposedTravelPlan(
+        fun `extracts readable stay location from map friendly value`() {
+            val day = Day(LocalDate.of(2020, 1, 1), "Dijon,+France")
+
+            assertEquals("Dijon", day.stayingAt)
+        }
+
+        @Test
+        fun `builds google maps direction url from distinct day locations`() {
+            val proposedTravelPlan = ProposedTravelPlan(
                 title = "One day trip",
                 plan = "Have a good time",
                 days = listOf(
-                    Day(LocalDate.of(2019, 12, 31), "Paris"),
-                    Day(LocalDate.of(2020, 1, 1), "Dijon"),
-                    Day(LocalDate.of(2020, 1, 2), "Dijon"),
-                    Day(LocalDate.of(2020, 1, 3), "Beaune"),
+                    Day(LocalDate.of(2019, 12, 31), "Paris,+France"),
+                    Day(LocalDate.of(2020, 1, 1), "Dijon,+France"),
+                    Day(LocalDate.of(2020, 1, 2), "Dijon,+France"),
+                    Day(LocalDate.of(2020, 1, 3), "Beaune,+France"),
                 ),
                 imageLinks = emptyList(),
                 pageLinks = emptyList(),
                 videoLinks = emptyList(),
                 countriesVisited = listOf("France"),
             )
-//            println(travelPlan.plan.journeyMapUrl)
-//            println(travelPlan.plan.journeyMapImageUrl())
+            val travelPlan = TravelPlan(
+                brief = JourneyTravelBrief(
+                    from = "Paris",
+                    to = "Beaune",
+                    transportPreference = "driving",
+                    brief = "A short trip through Burgundy",
+                    departureDate = LocalDate.of(2019, 12, 31),
+                    returnDate = LocalDate.of(2020, 1, 3),
+                ),
+                proposal = proposedTravelPlan,
+                stays = emptyList(),
+                travelers = Travelers(emptyList()),
+            )
+
+            assertEquals(
+                "https://www.google.com/maps/dir/Paris%2C%2BFrance/Dijon%2C%2BFrance/Beaune%2C%2BFrance",
+                travelPlan.journeyMapUrl,
+            )
         }
     }
 

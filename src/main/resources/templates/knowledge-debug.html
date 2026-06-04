@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{common/layout :: layout(~{::title}, ~{::section})}">
+<head>
+    <title>Knowledge Retrieval Debug</title>
+</head>
+<body>
+<section>
+    <h2>Knowledge Retrieval Debug</h2>
+
+    <p>
+        <a href="/travel/journey">Back to planner</a>
+        |
+        <a href="/knowledge">Manage knowledge base</a>
+    </p>
+
+    <form action="/knowledge/debug" method="get">
+        <div class="form-group">
+            <label for="query">Search Query</label>
+            <textarea id="query" name="query" rows="4" th:text="${query}"
+                      placeholder="Barcelona to Bordeaux wine countryside history road trip"></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Search</button>
+    </form>
+
+    <h3>Documents</h3>
+    <p th:if="${#lists.isEmpty(documents)}">No documents indexed.</p>
+    <ul th:if="${!#lists.isEmpty(documents)}">
+        <li th:each="document : ${documents}">
+            <strong th:text="${document.title}"></strong>
+            <span th:text="' - ' + ${document.sourceType}"></span>
+        </li>
+    </ul>
+
+    <h3>Retrieved Chunks</h3>
+    <p th:if="${#lists.isEmpty(hits)}">No chunks matched the query.</p>
+    <ol th:if="${!#lists.isEmpty(hits)}">
+        <li th:each="hit : ${hits}">
+            <strong th:text="${hit.citationId}"></strong>
+            <span th:text="' score=' + ${#numbers.formatDecimal(hit.score, 1, 3)}"></span>
+            <p th:text="${hit.text}"></p>
+            <small th:text="'Matched: ' + ${hit.matchedTermsText}"></small>
+            <br>
+            <small th:text="${hit.source}"></small>
+        </li>
+    </ol>
+</section>
+</body>
+</html>

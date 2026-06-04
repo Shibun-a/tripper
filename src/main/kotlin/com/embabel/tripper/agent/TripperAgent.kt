@@ -30,6 +30,8 @@ import com.embabel.common.ai.model.LlmOptions
 import com.embabel.common.util.StringTransformer
 import com.embabel.tripper.BraveImageSearchService
 import com.embabel.tripper.config.ToolsConfig
+import com.embabel.tripper.rag.TravelKnowledgeContext
+import com.embabel.tripper.rag.TravelKnowledgeService
 import com.embabel.tripper.util.ImageChecker
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -57,6 +59,7 @@ private const val WEATHER_TOOLS = "weather"
 class TripperAgent(
     private val config: TripperConfig,
     private val braveImageSearch: BraveImageSearchService,
+    private val travelKnowledgeService: TravelKnowledgeService,
 ) {
 
     private val logger = LoggerFactory.getLogger(TripperAgent::class.java)
@@ -90,9 +93,25 @@ class TripperAgent(
 
 
     @Action
+    fun retrieveTravelKnowledge(
+        travelBrief: JourneyTravelBrief,
+        travelers: Travelers,
+    ): TravelKnowledgeContext {
+        val query = buildString {
+            append("${travelBrief.from} ${travelBrief.to} ${travelBrief.transportPreference} ")
+            append("${travelBrief.departureDate} ${travelBrief.returnDate} ")
+            append(travelBrief.brief)
+            append(' ')
+            append(travelers.travelers.joinToString(" ") { "${it.name} ${it.about}" })
+        }
+        return travelKnowledgeService.retrieveForQuery(query, 6)
+    }
+
+    @Action
     fun findPointsOfInterest(
         travelBrief: JourneyTravelBrief,
         travelers: Travelers,
+        knowledgeContext: TravelKnowledgeContext,
         context: OperationContext,
     ): ItineraryIdeas {
         return context.ai()
@@ -114,6 +133,9 @@ class TripperAgent(
                 Use mapping tools to consider appropriate order and put a rough date
                 range for each point of interest.
                 Consider likely weather
+                
+                Consider this user-provided travel knowledge when relevant:
+                ${knowledgeContext.contribution()}
             """.trimIndent(),
             )
     }
@@ -122,6 +144,7 @@ class TripperAgent(
     fun researchPointsOfInterest(
         travelBrief: JourneyTravelBrief,
         travelers: Travelers,
+        knowledgeContext: TravelKnowledgeContext,
         itineraryIdeas: ItineraryIdeas,
         confirmation: AcceptanceOfCost,
         context: OperationContext,
@@ -159,6 +182,9 @@ class TripperAgent(
                 Date: from ${poi.fromDate} to: ${poi.toDate}
                 </point-of-interest-to-research>
                 Use the image search tool to find images of the point of interest.
+                
+                User-provided travel knowledge that may be relevant:
+                ${knowledgeContext.contribution()}
             """.trimIndent(),
             )
             rpi
@@ -175,6 +201,7 @@ class TripperAgent(
     fun proposeTravelPlan(
         travelBrief: JourneyTravelBrief,
         travelers: Travelers,
+        knowledgeContext: TravelKnowledgeContext,
         poiFindings: PointOfInterestFindings,
         context: OperationContext,
     ): ProposedTravelPlan {
@@ -196,6 +223,11 @@ class TripperAgent(
 
                 <brief>${travelBrief.contribution()}</brief>
                 Consider the weather in your recommendations. Use mapping tools to consider distance of driving or walking.
+
+                User-provided travel knowledge:
+                ${knowledgeContext.contribution()}
+                If user-provided knowledge influences a recommendation, cite it inline using [KB:<citationId>].
+                Preserve the citation id exactly as provided.
 
                 Write up in ${config.wordCount} words or less.
                 Include links in text where appropriate and in the links field.
@@ -240,6 +272,7 @@ class TripperAgent(
         brief: JourneyTravelBrief,
         plan: ProposedTravelPlan,
         travelers: Travelers,
+        knowledgeContext: TravelKnowledgeContext,
         context: OperationContext,
     ): TravelPlan {
         // Sanitize the content to ensure it is safe for display
@@ -276,6 +309,7 @@ class TripperAgent(
             proposal = plan,
             stays = foundStays,
             travelers = travelers,
+            knowledgeContext = knowledgeContext,
         )
     }
 

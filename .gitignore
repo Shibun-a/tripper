@@ -8,6 +8,9 @@ embabel-agent-api/src/main/resources/mcp/**
 
 .idea
 
+.DS_Store
+**/.DS_Store
+
 **/*.log
 
 # Compiled class file
