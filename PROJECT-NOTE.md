@@ -13,6 +13,7 @@ The current goal of this fork is to evolve the baseline demo into a stronger AI 
 - `scripts/demo-plan-request.sh`: repeatable sample form submission against a running local app.
 - Phase 0 cleanup: README port fixes, wrapper-based CI/run commands, and baseline unit assertions.
 - Java-owned Phase 1 RAG MVP under `src/main/java/com/embabel/tripper/rag`, with document import, chunking, retrieval, prompt injection into the Agent workflow, and retrieval debug pages.
+- Java-owned Phase 2 itinerary verifier MVP under `src/main/java/com/embabel/tripper/verification`, with structured verification issues, route/budget/date/link/stay checks, a one-shot Agent repair loop, UI verification summary, and unit tests.
 
 ## Attribution
 

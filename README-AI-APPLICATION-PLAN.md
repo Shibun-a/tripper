@@ -111,22 +111,30 @@ User story:
 
 Functional requirements:
 
-- [ ] Validate that all dates from departure to return are covered.
-- [ ] Validate that each day has a location.
-- [ ] Validate that locations are ordered reasonably for the route.
-- [ ] Estimate travel time or distance between consecutive locations.
-- [ ] Check whether each stay matches the relevant travel days.
-- [ ] Check whether the plan exceeds the daily budget.
-- [ ] Check whether image and page links are valid.
-- [ ] If issues are found, send a structured repair request back to the planner.
+- [x] Validate that all dates from departure to return are covered.
+- [x] Validate that each day has a location.
+- [x] Validate that locations are ordered reasonably for the route.
+- [x] Estimate travel time or distance between consecutive locations.
+- [x] Check whether each stay matches the relevant travel days.
+- [x] Check whether the plan exceeds the daily budget.
+- [x] Check whether image and page links are valid.
+- [x] If issues are found, send a structured repair request back to the planner.
 
 Technical requirements:
 
-- [ ] Add a `PlanVerificationResult` domain model.
-- [ ] Add issue categories such as `DATE_GAP`, `ROUTE_TOO_LONG`, `BUDGET_EXCEEDED`, `INVALID_LINK`, and `MISSING_STAY`.
-- [ ] Add severity levels: `INFO`, `WARNING`, `ERROR`.
-- [ ] Persist verifier output for each planning run.
-- [ ] Display verification status in the UI.
+- [x] Add a `PlanVerificationResult` domain model.
+- [x] Add issue categories such as `DATE_GAP`, `ROUTE_TOO_LONG`, `BUDGET_EXCEEDED`, `INVALID_LINK`, and `MISSING_STAY`.
+- [x] Add severity levels: `INFO`, `WARNING`, `ERROR`.
+- [x] Persist verifier output for each planning run.
+- [x] Display verification status in the UI.
+
+Current implementation note:
+
+- Phase 2 is implemented as a Java-owned verifier MVP under `src/main/java/com/embabel/tripper/verification`.
+- The verifier performs deterministic checks for date coverage, duplicate/out-of-range dates, missing locations, budget mentions, URL syntax, stay coverage, and route estimates.
+- Route estimates use an internal city coordinate catalog and haversine approximation so local tests remain deterministic.
+- The Agent runs a one-shot repair action when blocking verifier errors are found, then verifies the repaired proposal again before accommodation lookup.
+- Link checks currently validate URL structure. Network reachability checks can be added later with a timeout-controlled link checker.
 
 Acceptance criteria:
 

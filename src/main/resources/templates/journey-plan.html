@@ -43,6 +43,43 @@
 
             <div th:utext="${travelPlan.proposal.plan}" style="margin-bottom: 1rem;"></div>
 
+            <div th:if="${travelPlan.verificationResult != null}" style="margin-bottom: 1.5rem;">
+                <h3>Verification</h3>
+                <p style="margin-bottom: 0.5rem;">
+                    <strong>Status:</strong>
+                    <span th:text="${travelPlan.verificationResult.status}"></span>
+                    <span th:if="${travelPlan.verificationResult.repaired}"
+                          style="margin-left: 0.75rem;">Repaired before final display</span>
+                </p>
+                <p th:text="${travelPlan.verificationResult.summary}" style="margin-bottom: 0.75rem;"></p>
+
+                <ul th:if="${travelPlan.verificationResult.hasIssues}" style="margin-bottom: 1rem;">
+                    <li th:each="issue : ${travelPlan.verificationResult.issues}" style="margin-bottom: 0.5rem;">
+                        <strong>
+                            <span th:text="${issue.severity}"></span>
+                            <span th:text="${issue.category}"></span>
+                        </strong>
+                        <span th:text="${issue.message}"></span>
+                        <small th:if="${issue.details != null}" th:text="${issue.details}"
+                               style="display: block;"></small>
+                    </li>
+                </ul>
+
+                <div th:if="${travelPlan.verificationResult.routeEstimates != null && !#lists.isEmpty(travelPlan.verificationResult.routeEstimates)}">
+                    <h4>Route Estimates</h4>
+                    <ul style="margin-bottom: 1rem;">
+                        <li th:each="leg : ${travelPlan.verificationResult.routeEstimates}"
+                            style="margin-bottom: 0.35rem;">
+                            <span th:text="${leg.fromLocation + ' -> ' + leg.toLocation}"></span>
+                            <span th:if="${leg.distanceKm != null}"
+                                  th:text="${' approx ' + #numbers.formatDecimal(leg.distanceKm, 1, 0) + ' km'}"></span>
+                            <span th:if="${leg.estimatedHours != null}"
+                                  th:text="${' / ' + #numbers.formatDecimal(leg.estimatedHours, 1, 1) + ' h'}"></span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
             <div th:if="${travelPlan.knowledgeContext != null && travelPlan.knowledgeContext.hasHits}">
                 <h3>Knowledge Sources Used</h3>
                 <ol>

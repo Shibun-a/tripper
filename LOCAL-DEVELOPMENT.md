@@ -164,6 +164,39 @@ Current implementation:
 
 The knowledge base is reset when the application restarts. A later phase can replace the in-memory term-vector index with persistent embeddings and a vector store.
 
+## Itinerary Verification
+
+Phase 2 adds a Java-owned itinerary verifier MVP.
+
+Implementation path:
+
+```text
+src/main/java/com/embabel/tripper/verification
+```
+
+What it checks:
+
+- Requested date coverage from departure to return.
+- Duplicate or out-of-range itinerary dates.
+- Missing `locationAndCountry` values.
+- Approximate route distance and travel time for known cities.
+- Budget mentions in the generated plan text.
+- URL syntax for page, image, video, and stay links.
+- Stay coverage for planned travel days after accommodation lookup.
+
+Agent behavior:
+
+- `TripperAgent.verifyAndRepairTravelPlan` verifies the first proposed plan.
+- If the verifier finds ERROR-level issues, the Agent sends a structured repair prompt back to the planner.
+- The repaired proposal is verified again before Airbnb lookup.
+- The final `TravelPlan` includes a `PlanVerificationResult` shown on `journey-plan.html`.
+
+Current limitations:
+
+- Route estimates use an internal coordinate catalog and haversine approximation.
+- URL checks validate syntax only; they do not perform network reachability checks.
+- Verification results are persisted in memory and reset when the app restarts.
+
 ## Useful Files
 
 - `README.md`: project overview and quick start.

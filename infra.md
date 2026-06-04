@@ -9,9 +9,11 @@ Tripper 是一个旅行规划 Agent 应用。用户在 Web 表单中输入出发
 1. 根据用户 brief 和 traveler profile 寻找兴趣点。
 2. 对每个兴趣点进行并发调研。
 3. 汇总调研结果生成结构化旅行计划。
-4. 根据每天停留地点寻找住宿链接。
-5. 对 HTML 和图片链接做后处理。
-6. 通过 Thymeleaf/htmx 页面展示最终结果和执行过程。
+4. 对行程做确定性校验，并在发现阻塞问题时触发一次结构化修复。
+5. 根据每天停留地点寻找住宿链接。
+6. 对最终行程做住宿、预算、链接和路线一致性校验。
+7. 对 HTML 和图片链接做后处理。
+8. 通过 Thymeleaf/htmx 页面展示最终结果和执行过程。
 
 项目的 AI 能力主要来自：
 
@@ -19,6 +21,7 @@ Tripper 是一个旅行规划 Agent 应用。用户在 Web 表单中输入出发
 - OpenAI 模型调用。
 - MCP 工具调用，包括 Web、Maps、Weather、Browser Automation、Airbnb 等。
 - 结构化领域模型，约束 LLM 输出为可被程序继续处理的数据对象。
+- Java 实现的 RAG 和行程校验模块，用于展示个人扩展能力。
 
 ## 2. 总体架构
 
@@ -29,6 +32,7 @@ flowchart TD
     Controller --> Platform["Embabel AgentPlatform"]
     Platform --> Agent["TripperAgent"]
     Agent --> Domain["Travel Domain Model"]
+    Agent --> Verifier["Java Itinerary Verifier"]
     Agent --> LLM["OpenAI Models"]
     Agent --> Tools["Tool Groups / MCP Tools"]
     Tools --> MCP["Docker MCP Gateway / MCP Servers"]
@@ -182,11 +186,16 @@ flowchart TD
 4. `proposeTravelPlan`
    - 汇总兴趣点调研信息，生成 `ProposedTravelPlan`。
    - 要求 LLM 输出 HTML 计划、每日地点、图片、视频、页面链接和访问国家。
-5. `findPlacesToSleep`
+5. `verifyAndRepairTravelPlan`
+   - 调用 Java `ItineraryVerificationService` 校验日期覆盖、地点、预算、链接和路线估算。
+   - 如果存在 ERROR 级问题，将 `PlanVerificationResult` 作为结构化 repair prompt 传回 planner。
+   - 输出 `VerifiedTravelPlanProposal`。
+6. `findPlacesToSleep`
    - 根据每天停留城市分组。
    - 调用 Airbnb 工具寻找住宿搜索链接。
    - 输出 `TravelPlan`。
-6. `postProcessHtml`
+   - 住宿结果生成后再次执行最终校验，并把 `PlanVerificationResult` 放入 `TravelPlan`。
+7. `postProcessHtml`
    - 给图片添加样式。
    - 删除无效图片链接。
    - 作为 `makeTravelPlan` goal 的最终输出。
@@ -295,8 +304,8 @@ GitHub Actions CI 配置目录。
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main/kotlin/com/embabel/tripper/agent/TripperAgent.kt` | 项目核心 Agent。定义旅行规划 action，包括成本确认、兴趣点发现、兴趣点调研、计划生成、住宿搜索和 HTML 后处理。 |
-| `src/main/kotlin/com/embabel/tripper/agent/domain.kt` | 旅行领域模型。定义 `JourneyTravelBrief`、`Travelers`、`PointOfInterest`、`ItineraryIdeas`、`ResearchedPointOfInterest`、`ProposedTravelPlan`、`Stay`、`TravelPlan` 等数据结构。 |
+| `src/main/kotlin/com/embabel/tripper/agent/TripperAgent.kt` | 项目核心 Agent。定义旅行规划 action，包括成本确认、兴趣点发现、兴趣点调研、计划生成、校验/修复、住宿搜索和 HTML 后处理。 |
+| `src/main/kotlin/com/embabel/tripper/agent/domain.kt` | 旅行领域模型。定义 `JourneyTravelBrief`、`Travelers`、`PointOfInterest`、`ItineraryIdeas`、`ResearchedPointOfInterest`、`ProposedTravelPlan`、`Stay`、`TravelPlan` 等数据结构；最终 `TravelPlan` 持有知识库上下文和校验结果。 |
 
 ### 6.3.1 Java RAG 文件
 
@@ -310,6 +319,19 @@ GitHub Actions CI 配置目录。
 | `src/main/java/com/embabel/tripper/rag/TravelKnowledgeRepository.java` | 内存知识库 repository，保存文档和 chunk。 |
 | `src/main/java/com/embabel/tripper/rag/TravelKnowledgeService.java` | Java RAG 核心服务，负责导入、HTML 转文本、切 chunk、term-vector 检索和构造知识上下文。 |
 | `src/main/java/com/embabel/tripper/web/TravelKnowledgeController.java` | Java Controller，提供 `/knowledge` 管理页和 `/knowledge/debug` 检索调试页。 |
+
+### 6.3.2 Java 行程校验文件
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/main/java/com/embabel/tripper/verification/VerificationSeverity.java` | 校验问题严重级别枚举：`INFO`、`WARNING`、`ERROR`。 |
+| `src/main/java/com/embabel/tripper/verification/PlanIssueCategory.java` | 校验问题分类枚举，包括日期、路线、预算、链接和住宿问题。 |
+| `src/main/java/com/embabel/tripper/verification/PlanVerificationIssue.java` | 单个结构化校验问题，包含类别、级别、日期、地点、消息和修复提示详情。 |
+| `src/main/java/com/embabel/tripper/verification/TravelLegEstimate.java` | 相邻地点之间的路线估算结果，包含距离、耗时、估算方法和是否过长。 |
+| `src/main/java/com/embabel/tripper/verification/PlanVerificationResult.java` | 一次行程校验结果，实现 `PromptContributor`，可直接作为 repair prompt 的结构化上下文。 |
+| `src/main/java/com/embabel/tripper/verification/VerifiedTravelPlanProposal.java` | 已校验的 `ProposedTravelPlan` 包装对象，连接 proposal、verification result 和后续住宿搜索 action。 |
+| `src/main/java/com/embabel/tripper/verification/PlanVerificationRepository.java` | 内存校验结果 repository，保存最近 planning run 的校验输出。 |
+| `src/main/java/com/embabel/tripper/verification/ItineraryVerificationService.java` | Java 校验核心服务，负责日期覆盖、地点、路线估算、预算、URL、住宿覆盖等确定性校验。 |
 
 ### 6.4 外部工具和配置文件
 
@@ -349,7 +371,7 @@ GitHub Actions CI 配置目录。
 | 文件 | 职责 |
 | --- | --- |
 | `src/main/resources/templates/journey-form.html` | 旅行规划输入表单。支持出发地、目的地、交通方式、日期、预算、多个 traveler 和 brief 输入。 |
-| `src/main/resources/templates/journey-plan.html` | 最终旅行计划页面。展示标题、brief、traveler、地图链接、HTML 计划正文、Airbnb 住宿链接、参考页面和视频链接。 |
+| `src/main/resources/templates/journey-plan.html` | 最终旅行计划页面。展示标题、brief、traveler、地图链接、HTML 计划正文、校验状态、知识来源、Airbnb 住宿链接、参考页面和视频链接。 |
 | `src/main/resources/templates/login.html` | 登录页面。提供 Google OAuth2 登录入口，并显示登录错误和退出提示。 |
 | `src/main/resources/templates/common/layout.html` | 公共页面布局。加载 CSS、可选 htmx/SSE 脚本、用户 fragment、内容区域和 footer。 |
 | `src/main/resources/templates/common/platform.html` | 平台信息页面。链接到 Agent、Tool Groups、Models 和 Zipkin。 |
@@ -426,7 +448,7 @@ GitHub Actions CI 配置目录。
 | 扩展方向 | 建议新增位置 | 说明 |
 | --- | --- | --- |
 | RAG 知识库 | `src/main/java/com/embabel/tripper/rag` | Java-owned MVP：文档上传、切分、内存 term-vector 检索、citation；后续替换为 embedding/vector store。 |
-| 行程校验器 | `src/main/kotlin/com/embabel/tripper/verification` | 日期、预算、路线、链接、住宿一致性校验。 |
+| 行程校验器 | `src/main/java/com/embabel/tripper/verification` | Java-owned MVP：日期、预算、路线、链接、住宿一致性校验；后续可替换为 maps-backed verifier。 |
 | Agent 评测 | `src/test/kotlin` 和 `evals/` | 测试集、质量指标、回归报告。 |
 | 可观测性 | `src/main/kotlin/com/embabel/tripper/observability` | token、cost、latency、tool call、action trace。 |
 | Guardrails | `src/main/kotlin/com/embabel/tripper/safety` | prompt injection 防护、工具权限、敏感信息脱敏。 |

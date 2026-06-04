@@ -45,7 +45,9 @@ It demonstrates the power of the [Embabel agent framework](https://www.github.co
 
 ## Portfolio Extension Note
 
-This fork starts from the open-source Embabel Tripper project. The current goal is to turn the baseline demo into a stronger AI application portfolio project by adding reproducibility, architecture documentation, tests, and later RAG/evaluation/observability features.
+This fork starts from the open-source Embabel Tripper project. The current goal is to turn the baseline demo into a stronger AI application portfolio project by adding reproducibility, architecture documentation, tests, Java-owned RAG, itinerary verification, evaluation, and observability features.
+
+Current personal implementation includes a Java travel knowledge base MVP and a Java itinerary verifier with a one-shot Agent repair loop.
 
 Personal extension docs:
 

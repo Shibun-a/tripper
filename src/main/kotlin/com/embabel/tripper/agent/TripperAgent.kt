@@ -33,6 +33,8 @@ import com.embabel.tripper.config.ToolsConfig
 import com.embabel.tripper.rag.TravelKnowledgeContext
 import com.embabel.tripper.rag.TravelKnowledgeService
 import com.embabel.tripper.util.ImageChecker
+import com.embabel.tripper.verification.ItineraryVerificationService
+import com.embabel.tripper.verification.VerifiedTravelPlanProposal
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.ConfigurationProperties
 
@@ -60,6 +62,7 @@ class TripperAgent(
     private val config: TripperConfig,
     private val braveImageSearch: BraveImageSearchService,
     private val travelKnowledgeService: TravelKnowledgeService,
+    private val itineraryVerificationService: ItineraryVerificationService,
 ) {
 
     private val logger = LoggerFactory.getLogger(TripperAgent::class.java)
@@ -268,13 +271,92 @@ class TripperAgent(
     }
 
     @Action
+    fun verifyAndRepairTravelPlan(
+        travelBrief: JourneyTravelBrief,
+        travelers: Travelers,
+        knowledgeContext: TravelKnowledgeContext,
+        poiFindings: PointOfInterestFindings,
+        proposedPlan: ProposedTravelPlan,
+        context: OperationContext,
+    ): VerifiedTravelPlanProposal {
+        val verification = itineraryVerificationService.verifyProposal(travelBrief, proposedPlan)
+        if (!verification.isHasErrors()) {
+            return VerifiedTravelPlanProposal(proposedPlan, verification)
+        }
+
+        logger.warn(
+            "Repairing travel plan after verifier found {} error(s): {}",
+            verification.errorCount,
+            verification.issues.joinToString { "${it.category}:${it.message}" },
+        )
+
+        val repairedPlan = config.planner.promptRunner(context)
+            .withTools(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
+            .withPromptElements(
+                travelers, ResponseFormat.HTML,
+            )
+            .create<ProposedTravelPlan>(
+                prompt = """
+                The itinerary verifier found blocking issues in the proposed travel plan.
+                Repair the plan before it is shown to the user.
+
+                Keep the user's trip intent, travelers, destination, date range, and style.
+                Return a complete ProposedTravelPlan, not a diff.
+                Preserve useful recommendations and citations where they are still valid.
+
+                <brief>${travelBrief.contribution()}</brief>
+
+                User-provided travel knowledge:
+                ${knowledgeContext.contribution()}
+
+                Structured verifier issues:
+                ${verification.contribution()}
+
+                Required repairs:
+                - Cover every date from ${travelBrief.departureDate} to ${travelBrief.returnDate} exactly once.
+                - Use a non-empty locationAndCountry for every day.
+                - Keep each locationAndCountry in Google Maps friendly format, for example Dijon,+France.
+                - Remove or replace invalid URLs.
+                - Keep recommendations within the requested daily budget where possible.
+                - If user-provided knowledge influences a recommendation, cite it inline using [KB:<citationId>].
+
+                Original plan:
+                ${proposedPlan.plan}
+
+                Original days:
+                ${proposedPlan.days.joinToString("\n") { "${it.date}: ${it.locationAndCountry}" }}
+
+                Relevant point-of-interest research:
+                ${
+                    poiFindings.pointsOfInterest.joinToString("\n") {
+                        """
+                    ${it.pointOfInterest.name}
+                    ${it.research}
+                    ${it.links.joinToString { link -> "${link.url}: ${link.summary}" }}
+                """.trimIndent()
+                    }
+                }
+            """.trimIndent(),
+            )
+
+        val repairedVerification = itineraryVerificationService.verifyProposal(
+            travelBrief,
+            repairedPlan,
+            true,
+            1,
+        )
+        return VerifiedTravelPlanProposal(repairedPlan, repairedVerification)
+    }
+
+    @Action
     fun findPlacesToSleep(
         brief: JourneyTravelBrief,
-        plan: ProposedTravelPlan,
+        verifiedProposal: VerifiedTravelPlanProposal,
         travelers: Travelers,
         knowledgeContext: TravelKnowledgeContext,
         context: OperationContext,
     ): TravelPlan {
+        val plan = verifiedProposal.proposal
         // Sanitize the content to ensure it is safe for display
         val stays = plan.days.groupBy { it.stayingAt }.map { (stayingAt, days) ->
             Stay(
@@ -304,12 +386,21 @@ class TripperAgent(
             )
         }
 
+        val finalVerification = itineraryVerificationService.verifyTravelPlan(
+            brief,
+            plan,
+            foundStays,
+            verifiedProposal.isRepaired(),
+            verifiedProposal.repairAttempts,
+        )
+
         return TravelPlan(
             brief = brief,
             proposal = plan,
             stays = foundStays,
             travelers = travelers,
             knowledgeContext = knowledgeContext,
+            verificationResult = finalVerification,
         )
     }
 

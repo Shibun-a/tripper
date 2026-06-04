@@ -20,6 +20,7 @@ import com.embabel.agent.domain.library.InternetResource
 import com.embabel.agent.domain.library.InternetResources
 import com.embabel.common.ai.prompt.PromptContributor
 import com.embabel.tripper.rag.TravelKnowledgeContext
+import com.embabel.tripper.verification.PlanVerificationResult
 import com.fasterxml.jackson.annotation.JsonPropertyDescription
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize
 import java.net.URLEncoder
@@ -145,6 +146,7 @@ data class TravelPlan(
     val stays: List<Stay>,
     val travelers: Travelers,
     val knowledgeContext: TravelKnowledgeContext = TravelKnowledgeContext.empty(),
+    val verificationResult: PlanVerificationResult = PlanVerificationResult.empty(),
 ) : HasContent {
 
     /**
@@ -177,5 +179,8 @@ data class TravelPlan(
             ${proposal.imageLinks.joinToString("\n") { "${it.url} - ${it.summary}" }}
             Knowledge sources:
             ${knowledgeContext.hits.joinToString("\n") { "${it.citationId} - ${it.source}" }}
+            Verification:
+            ${verificationResult.summary}
+            ${verificationResult.issues.joinToString("\n") { "${it.severity} ${it.category}: ${it.message}" }}
         """.trimIndent()
 }
