@@ -326,10 +326,13 @@ GitHub Actions CI 配置目录。
 | --- | --- |
 | `src/main/java/com/embabel/tripper/verification/VerificationSeverity.java` | 校验问题严重级别枚举：`INFO`、`WARNING`、`ERROR`。 |
 | `src/main/java/com/embabel/tripper/verification/PlanIssueCategory.java` | 校验问题分类枚举，包括日期、路线、预算、链接和住宿问题。 |
+| `src/main/java/com/embabel/tripper/verification/ItineraryDay.java` | Java verifier 的每日行程输入 DTO，避免 Java 编译期依赖 Kotlin domain。 |
+| `src/main/java/com/embabel/tripper/verification/ItineraryLink.java` | Java verifier 的链接输入 DTO，标记链接来源字段和 URL。 |
+| `src/main/java/com/embabel/tripper/verification/ItineraryStay.java` | Java verifier 的住宿输入 DTO，保存住宿覆盖日期和住宿链接。 |
+| `src/main/java/com/embabel/tripper/verification/ItineraryVerificationRequest.java` | Java verifier 的统一输入请求，承载 brief、plan、days、links 和 stays。 |
 | `src/main/java/com/embabel/tripper/verification/PlanVerificationIssue.java` | 单个结构化校验问题，包含类别、级别、日期、地点、消息和修复提示详情。 |
 | `src/main/java/com/embabel/tripper/verification/TravelLegEstimate.java` | 相邻地点之间的路线估算结果，包含距离、耗时、估算方法和是否过长。 |
 | `src/main/java/com/embabel/tripper/verification/PlanVerificationResult.java` | 一次行程校验结果，实现 `PromptContributor`，可直接作为 repair prompt 的结构化上下文。 |
-| `src/main/java/com/embabel/tripper/verification/VerifiedTravelPlanProposal.java` | 已校验的 `ProposedTravelPlan` 包装对象，连接 proposal、verification result 和后续住宿搜索 action。 |
 | `src/main/java/com/embabel/tripper/verification/PlanVerificationRepository.java` | 内存校验结果 repository，保存最近 planning run 的校验输出。 |
 | `src/main/java/com/embabel/tripper/verification/ItineraryVerificationService.java` | Java 校验核心服务，负责日期覆盖、地点、路线估算、预算、URL、住宿覆盖等确定性校验。 |
 

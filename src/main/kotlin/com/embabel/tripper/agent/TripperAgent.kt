@@ -33,8 +33,11 @@ import com.embabel.tripper.config.ToolsConfig
 import com.embabel.tripper.rag.TravelKnowledgeContext
 import com.embabel.tripper.rag.TravelKnowledgeService
 import com.embabel.tripper.util.ImageChecker
+import com.embabel.tripper.verification.ItineraryDay
+import com.embabel.tripper.verification.ItineraryLink
+import com.embabel.tripper.verification.ItineraryStay
+import com.embabel.tripper.verification.ItineraryVerificationRequest
 import com.embabel.tripper.verification.ItineraryVerificationService
-import com.embabel.tripper.verification.VerifiedTravelPlanProposal
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.ConfigurationProperties
 
@@ -279,7 +282,12 @@ class TripperAgent(
         proposedPlan: ProposedTravelPlan,
         context: OperationContext,
     ): VerifiedTravelPlanProposal {
-        val verification = itineraryVerificationService.verifyProposal(travelBrief, proposedPlan)
+        val verificationRequest = verificationRequest(
+            brief = travelBrief,
+            plan = proposedPlan,
+            stays = emptyList(),
+        )
+        val verification = itineraryVerificationService.verifyProposal(verificationRequest)
         if (!verification.isHasErrors()) {
             return VerifiedTravelPlanProposal(proposedPlan, verification)
         }
@@ -340,8 +348,11 @@ class TripperAgent(
             )
 
         val repairedVerification = itineraryVerificationService.verifyProposal(
-            travelBrief,
-            repairedPlan,
+            verificationRequest(
+                brief = travelBrief,
+                plan = repairedPlan,
+                stays = emptyList(),
+            ),
             true,
             1,
         )
@@ -387,11 +398,13 @@ class TripperAgent(
         }
 
         val finalVerification = itineraryVerificationService.verifyTravelPlan(
-            brief,
-            plan,
-            foundStays,
+            verificationRequest(
+                brief = brief,
+                plan = plan,
+                stays = foundStays,
+            ),
             verifiedProposal.isRepaired(),
-            verifiedProposal.repairAttempts,
+            verifiedProposal.repairAttempts(),
         )
 
         return TravelPlan(
@@ -433,6 +446,41 @@ class TripperAgent(
         html.replace(
             "<img",
             "<img class=\"styled-image-thick\""
+        )
+    }
+
+    private fun verificationRequest(
+        brief: JourneyTravelBrief,
+        plan: ProposedTravelPlan,
+        stays: List<Stay>,
+    ): ItineraryVerificationRequest {
+        val pageLinks = plan.pageLinks.map {
+            ItineraryLink("pageLinks", it.url, it.summary)
+        }
+        val imageLinks = plan.imageLinks.map {
+            ItineraryLink("imageLinks", it.url, it.summary)
+        }
+        val videoLinks = plan.videoLinks.map {
+            ItineraryLink("videoLinks", it.url, it.summary)
+        }
+        val stayModels = stays.map { stay ->
+            ItineraryStay(
+                stay.days.map { ItineraryDay(it.date, it.locationAndCountry) },
+                stay.airbnbUrl,
+            )
+        }
+        return ItineraryVerificationRequest(
+            brief.from,
+            brief.to,
+            brief.transportPreference,
+            brief.departureDate,
+            brief.returnDate,
+            brief.dailyBudget,
+            plan.title,
+            plan.plan,
+            plan.days.map { ItineraryDay(it.date, it.locationAndCountry) },
+            pageLinks + imageLinks + videoLinks,
+            stayModels,
         )
     }
 

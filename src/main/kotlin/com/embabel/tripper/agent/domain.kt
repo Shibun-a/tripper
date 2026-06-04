@@ -123,6 +123,16 @@ data class ProposedTravelPlan(
     val countriesVisited: List<String>,
 )
 
+data class VerifiedTravelPlanProposal(
+    val proposal: ProposedTravelPlan,
+    val verificationResult: PlanVerificationResult,
+) {
+
+    fun isRepaired(): Boolean = verificationResult.isRepaired
+
+    fun repairAttempts(): Int = verificationResult.repairAttempts
+}
+
 data class Stay(
     val days: List<Day>,
     val airbnbUrl: String? = null,

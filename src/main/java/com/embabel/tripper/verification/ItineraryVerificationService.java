@@ -1,16 +1,10 @@
 package com.embabel.tripper.verification;
 
-import com.embabel.agent.domain.library.InternetResource;
-import com.embabel.tripper.agent.Day;
-import com.embabel.tripper.agent.JourneyTravelBrief;
-import com.embabel.tripper.agent.ProposedTravelPlan;
-import com.embabel.tripper.agent.Stay;
 import org.springframework.stereotype.Service;
 
 import java.net.URI;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -70,41 +64,37 @@ public class ItineraryVerificationService {
     }
 
     public PlanVerificationResult verifyProposal(
-            JourneyTravelBrief brief,
-            ProposedTravelPlan proposal
+            ItineraryVerificationRequest request
     ) {
-        return verifyProposal(brief, proposal, false, 0);
+        return verifyProposal(request, false, 0);
     }
 
     public PlanVerificationResult verifyProposal(
-            JourneyTravelBrief brief,
-            ProposedTravelPlan proposal,
+            ItineraryVerificationRequest request,
             boolean repaired,
             int repairAttempts
     ) {
         VerificationDraft draft = new VerificationDraft();
-        validateDateCoverage(brief, proposal, draft);
-        validateLocations(proposal, draft);
-        validateRoute(brief, proposal, draft);
-        validateBudget(brief, proposal, draft);
-        validateLinks(proposal, draft);
+        validateDateCoverage(request, draft);
+        validateLocations(request, draft);
+        validateRoute(request, draft);
+        validateBudget(request, draft);
+        validateLinks(request, draft);
         return persist(draft, repaired, repairAttempts);
     }
 
     public PlanVerificationResult verifyTravelPlan(
-            JourneyTravelBrief brief,
-            ProposedTravelPlan proposal,
-            List<Stay> stays,
+            ItineraryVerificationRequest request,
             boolean repaired,
             int repairAttempts
     ) {
         VerificationDraft draft = new VerificationDraft();
-        validateDateCoverage(brief, proposal, draft);
-        validateLocations(proposal, draft);
-        validateRoute(brief, proposal, draft);
-        validateBudget(brief, proposal, draft);
-        validateLinks(proposal, draft);
-        validateStays(proposal, stays, draft);
+        validateDateCoverage(request, draft);
+        validateLocations(request, draft);
+        validateRoute(request, draft);
+        validateBudget(request, draft);
+        validateLinks(request, draft);
+        validateStays(request, draft);
         return persist(draft, repaired, repairAttempts);
     }
 
@@ -113,12 +103,11 @@ public class ItineraryVerificationService {
     }
 
     private void validateDateCoverage(
-            JourneyTravelBrief brief,
-            ProposedTravelPlan proposal,
+            ItineraryVerificationRequest request,
             VerificationDraft draft
     ) {
-        LocalDate departure = brief.getDepartureDate();
-        LocalDate returns = brief.getReturnDate();
+        LocalDate departure = request.departureDate();
+        LocalDate returns = request.returnDate();
         if (returns.isBefore(departure)) {
             draft.issue(PlanVerificationIssue.of(
                     PlanIssueCategory.DATE_OUT_OF_RANGE,
@@ -129,8 +118,8 @@ public class ItineraryVerificationService {
         }
 
         Map<LocalDate, Long> dateCounts = new LinkedHashMap<>();
-        for (Day day : daysOf(proposal)) {
-            if (day.getDate() == null) {
+        for (ItineraryDay day : request.days()) {
+            if (day.date() == null) {
                 draft.issue(PlanVerificationIssue.of(
                         PlanIssueCategory.DATE_GAP,
                         VerificationSeverity.ERROR,
@@ -138,12 +127,12 @@ public class ItineraryVerificationService {
                 ));
                 continue;
             }
-            dateCounts.merge(day.getDate(), 1L, Long::sum);
-            if (day.getDate().isBefore(departure) || day.getDate().isAfter(returns)) {
+            dateCounts.merge(day.date(), 1L, Long::sum);
+            if (day.date().isBefore(departure) || day.date().isAfter(returns)) {
                 draft.issue(PlanVerificationIssue.onDate(
                         PlanIssueCategory.DATE_OUT_OF_RANGE,
                         VerificationSeverity.ERROR,
-                        day.getDate(),
+                        day.date(),
                         "The itinerary includes a day outside the requested travel window."
                 ));
             }
@@ -173,16 +162,16 @@ public class ItineraryVerificationService {
     }
 
     private void validateLocations(
-            ProposedTravelPlan proposal,
+            ItineraryVerificationRequest request,
             VerificationDraft draft
     ) {
-        for (Day day : daysOf(proposal)) {
-            if (isBlank(day.getLocationAndCountry())) {
+        for (ItineraryDay day : request.days()) {
+            if (isBlank(day.locationAndCountry())) {
                 draft.issue(PlanVerificationIssue.atLocation(
                         PlanIssueCategory.MISSING_LOCATION,
                         VerificationSeverity.ERROR,
-                        day.getDate(),
-                        day.getLocationAndCountry(),
+                        day.date(),
+                        day.locationAndCountry(),
                         "A planned day is missing its locationAndCountry value.",
                         "Expected a Google Maps friendly value such as Dijon,+France."
                 ));
@@ -191,24 +180,23 @@ public class ItineraryVerificationService {
     }
 
     private void validateRoute(
-            JourneyTravelBrief brief,
-            ProposedTravelPlan proposal,
+            ItineraryVerificationRequest request,
             VerificationDraft draft
     ) {
-        List<Day> orderedDays = daysOf(proposal).stream()
-                .filter(day -> day.getDate() != null)
-                .sorted(Comparator.comparing(Day::getDate))
+        List<ItineraryDay> orderedDays = request.days().stream()
+                .filter(day -> day.date() != null)
+                .sorted(Comparator.comparing(ItineraryDay::date))
                 .toList();
 
         for (int i = 1; i < orderedDays.size(); i++) {
-            Day previous = orderedDays.get(i - 1);
-            Day current = orderedDays.get(i);
-            if (sameLocation(previous.getLocationAndCountry(), current.getLocationAndCountry())) {
+            ItineraryDay previous = orderedDays.get(i - 1);
+            ItineraryDay current = orderedDays.get(i);
+            if (sameLocation(previous.locationAndCountry(), current.locationAndCountry())) {
                 draft.routeEstimate(new TravelLegEstimate(
-                        previous.getDate(),
-                        current.getDate(),
-                        displayLocation(previous.getLocationAndCountry()),
-                        displayLocation(current.getLocationAndCountry()),
+                        previous.date(),
+                        current.date(),
+                        displayLocation(previous.locationAndCountry()),
+                        displayLocation(current.locationAndCountry()),
                         0.0,
                         0.0,
                         "same-location",
@@ -217,14 +205,14 @@ public class ItineraryVerificationService {
                 continue;
             }
 
-            Coordinate from = coordinateFor(previous.getLocationAndCountry());
-            Coordinate to = coordinateFor(current.getLocationAndCountry());
+            Coordinate from = coordinateFor(previous.locationAndCountry());
+            Coordinate to = coordinateFor(current.locationAndCountry());
             if (from == null || to == null) {
                 draft.issue(PlanVerificationIssue.atLocation(
                         PlanIssueCategory.ROUTE_ESTIMATE_UNAVAILABLE,
                         VerificationSeverity.INFO,
-                        current.getDate(),
-                        current.getLocationAndCountry(),
+                        current.date(),
+                        current.locationAndCountry(),
                         "Route estimate is unavailable for this leg.",
                         "Add this city to the verifier coordinate catalog or use a maps-backed verifier."
                 ));
@@ -232,13 +220,13 @@ public class ItineraryVerificationService {
             }
 
             double distanceKm = haversineKm(from, to) * 1.25;
-            double hours = distanceKm / travelSpeedKmh(brief.getTransportPreference());
-            boolean tooLong = hours > maxDailyTravelHours(brief.getTransportPreference());
+            double hours = distanceKm / travelSpeedKmh(request.transportPreference());
+            boolean tooLong = hours > maxDailyTravelHours(request.transportPreference());
             draft.routeEstimate(new TravelLegEstimate(
-                    previous.getDate(),
-                    current.getDate(),
-                    displayLocation(previous.getLocationAndCountry()),
-                    displayLocation(current.getLocationAndCountry()),
+                    previous.date(),
+                    current.date(),
+                    displayLocation(previous.locationAndCountry()),
+                    displayLocation(current.locationAndCountry()),
                     distanceKm,
                     hours,
                     "coordinate-haversine",
@@ -248,8 +236,8 @@ public class ItineraryVerificationService {
                 draft.issue(PlanVerificationIssue.atLocation(
                         PlanIssueCategory.ROUTE_TOO_LONG,
                         VerificationSeverity.WARNING,
-                        current.getDate(),
-                        current.getLocationAndCountry(),
+                        current.date(),
+                        current.locationAndCountry(),
                         "This itinerary leg may be too long for one travel day.",
                         "Approx " + Math.round(distanceKm) + " km / " + String.format(Locale.ROOT, "%.1f", hours) + " h."
                 ));
@@ -258,11 +246,10 @@ public class ItineraryVerificationService {
     }
 
     private void validateBudget(
-            JourneyTravelBrief brief,
-            ProposedTravelPlan proposal,
+            ItineraryVerificationRequest request,
             VerificationDraft draft
     ) {
-        if (brief.getDailyBudget() <= 0.0) {
+        if (request.dailyBudget() <= 0.0) {
             draft.issue(PlanVerificationIssue.of(
                     PlanIssueCategory.BUDGET_EXCEEDED,
                     VerificationSeverity.ERROR,
@@ -271,93 +258,78 @@ public class ItineraryVerificationService {
             return;
         }
 
-        Matcher matcher = MONEY_PATTERN.matcher(proposal.getPlan() == null ? "" : proposal.getPlan());
+        Matcher matcher = MONEY_PATTERN.matcher(request.planText() == null ? "" : request.planText());
         while (matcher.find()) {
             double amount = Double.parseDouble(matcher.group(1));
-            if (amount > brief.getDailyBudget()) {
+            if (amount > request.dailyBudget()) {
                 draft.issue(PlanVerificationIssue.of(
                         PlanIssueCategory.BUDGET_EXCEEDED,
                         VerificationSeverity.WARNING,
                         "The plan mentions $" + Math.round(amount)
                                 + ", which exceeds the requested daily budget of $"
-                                + Math.round(brief.getDailyBudget()) + "."
+                                + Math.round(request.dailyBudget()) + "."
                 ));
             }
         }
     }
 
     private void validateLinks(
-            ProposedTravelPlan proposal,
+            ItineraryVerificationRequest request,
             VerificationDraft draft
     ) {
-        validateResources("pageLinks", proposal.getPageLinks(), draft);
-        validateResources("imageLinks", proposal.getImageLinks(), draft);
-        validateResources("videoLinks", proposal.getVideoLinks(), draft);
-    }
-
-    private void validateResources(
-            String fieldName,
-            List<InternetResource> resources,
-            VerificationDraft draft
-    ) {
-        if (resources == null) {
-            return;
-        }
-        for (InternetResource resource : resources) {
-            String url = resource.getUrl();
-            if (!isValidHttpUrl(url)) {
+        for (ItineraryLink link : request.links()) {
+            if (!isValidHttpUrl(link.url())) {
                 draft.issue(PlanVerificationIssue.of(
                         PlanIssueCategory.INVALID_LINK,
                         VerificationSeverity.ERROR,
-                        fieldName + " contains an invalid URL: " + url
+                        link.fieldName() + " contains an invalid URL: " + link.url()
                 ));
             }
         }
     }
 
     private void validateStays(
-            ProposedTravelPlan proposal,
-            List<Stay> stays,
+            ItineraryVerificationRequest request,
             VerificationDraft draft
     ) {
         Set<LocalDate> itineraryDates = new HashSet<>();
-        for (Day day : daysOf(proposal)) {
-            if (day.getDate() != null) {
-                itineraryDates.add(day.getDate());
+        for (ItineraryDay day : request.days()) {
+            if (day.date() != null) {
+                itineraryDates.add(day.date());
             }
         }
 
         Set<LocalDate> stayDates = new HashSet<>();
-        for (Stay stay : stays) {
-            if (stay.getDays().isEmpty()) {
+        for (ItineraryStay stay : request.stays()) {
+            if (stay.days().isEmpty()) {
                 draft.issue(PlanVerificationIssue.of(
                         PlanIssueCategory.MISSING_STAY,
                         VerificationSeverity.ERROR,
                         "A stay record contains no covered days."
                 ));
             }
-            if (isBlank(stay.getAirbnbUrl())) {
+            if (isBlank(stay.stayUrl())) {
                 draft.issue(PlanVerificationIssue.atLocation(
                         PlanIssueCategory.MISSING_STAY,
                         VerificationSeverity.WARNING,
-                        stay.getDays().isEmpty() ? null : stay.getDays().getFirst().getDate(),
+                        stay.days().isEmpty() ? null : stay.days().get(0).date(),
                         stay.locationAndCountry(),
                         "A stay is missing an Airbnb search URL.",
                         "The final result can still be shown, but accommodation lookup should be retried."
                 ));
-            } else if (!isValidHttpUrl(stay.getAirbnbUrl())) {
+            } else if (!isValidHttpUrl(stay.stayUrl())) {
                 draft.issue(PlanVerificationIssue.atLocation(
                         PlanIssueCategory.INVALID_LINK,
                         VerificationSeverity.ERROR,
-                        stay.getDays().isEmpty() ? null : stay.getDays().getFirst().getDate(),
+                        stay.days().isEmpty() ? null : stay.days().get(0).date(),
                         stay.locationAndCountry(),
                         "A stay has an invalid Airbnb search URL.",
-                        stay.getAirbnbUrl()
+                        stay.stayUrl()
                 ));
             }
-            for (Day day : stay.getDays()) {
-                if (day.getDate() != null) {
-                    stayDates.add(day.getDate());
+            for (ItineraryDay day : stay.days()) {
+                if (day.date() != null) {
+                    stayDates.add(day.date());
                 }
             }
         }
@@ -402,13 +374,6 @@ public class ItineraryVerificationService {
         } catch (IllegalArgumentException ex) {
             return false;
         }
-    }
-
-    private List<Day> daysOf(ProposedTravelPlan proposal) {
-        if (proposal.getDays() == null) {
-            return List.of();
-        }
-        return proposal.getDays();
     }
 
     private boolean sameLocation(String left, String right) {
