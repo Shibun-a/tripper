@@ -197,6 +197,41 @@ Current limitations:
 - URL checks validate syntax only; they do not perform network reachability checks.
 - Verification results are persisted in memory and reset when the app restarts.
 
+## Agent Evaluation Harness
+
+Phase 3 adds an offline deterministic evaluation harness.
+
+Run the full evaluation:
+
+```bash
+./mvnw -q -DskipTests compile exec:java -Dexec.mainClass=com.embabel.tripper.eval.TravelEvaluationCli
+```
+
+Run a CI-sized subset manually:
+
+```bash
+./mvnw -q -DskipTests compile exec:java -Dexec.mainClass=com.embabel.tripper.eval.TravelEvaluationCli -Dexec.args="--limit 8"
+```
+
+Outputs:
+
+```text
+target/evals/travel-evaluation-report.json
+target/evals/travel-evaluation-report.md
+```
+
+Implementation path:
+
+```text
+src/main/java/com/embabel/tripper/eval
+evals/travel-eval-cases.json
+```
+
+Current limitations:
+
+- The default runner is deterministic and offline; it does not call the real Agent or LLM.
+- LLM-judge qualitative scoring is planned but not implemented.
+
 ## Useful Files
 
 - `README.md`: project overview and quick start.

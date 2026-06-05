@@ -156,12 +156,12 @@ User story:
 
 Functional requirements:
 
-- [ ] Create a dataset of 30-50 travel planning cases.
-- [ ] Include cases for short trips, long trips, strict budgets, multi-country routes, family trips, accessibility constraints, and food/history/nature preferences.
-- [ ] Run the planner against the dataset in an evaluation mode.
-- [ ] Compute deterministic metrics.
+- [x] Create a dataset of 30-50 travel planning cases.
+- [x] Include cases for short trips, long trips, strict budgets, multi-country routes, family trips, accessibility constraints, and food/history/nature preferences.
+- [x] Run an offline planner stand-in against the dataset in an evaluation mode.
+- [x] Compute deterministic metrics.
 - [ ] Optionally use an LLM judge for qualitative scoring.
-- [ ] Generate an evaluation report.
+- [x] Generate an evaluation report.
 
 Metrics:
 
@@ -177,9 +177,16 @@ Metrics:
 
 Acceptance criteria:
 
-- Evaluation can be run locally with one command.
-- Evaluation output is stored as JSON or Markdown.
-- CI can run a lightweight regression subset.
+- [x] Evaluation can be run locally with one command.
+- [x] Evaluation output is stored as JSON and Markdown.
+- [x] CI can run a lightweight regression subset through unit tests.
+
+Current implementation note:
+
+- Phase 3 is implemented as a Java-owned deterministic evaluation MVP under `src/main/java/com/embabel/tripper/eval`.
+- The dataset lives in `evals/travel-eval-cases.json` and currently contains 30 portfolio-oriented travel cases.
+- The current runner uses `DeterministicEvalPlanCandidateFactory` so CI can evaluate date coverage, budget/link/citation checks, tool-call success, latency, token cost, and verifier issues without real LLM or MCP calls.
+- The next improvement is to add an Agent-backed candidate factory and optional LLM judge so the same dataset can compare prompts, model settings, RAG behavior, and tool orchestration changes.
 
 Resume value:
 

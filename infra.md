@@ -21,7 +21,7 @@ Tripper 是一个旅行规划 Agent 应用。用户在 Web 表单中输入出发
 - OpenAI 模型调用。
 - MCP 工具调用，包括 Web、Maps、Weather、Browser Automation、Airbnb 等。
 - 结构化领域模型，约束 LLM 输出为可被程序继续处理的数据对象。
-- Java 实现的 RAG 和行程校验模块，用于展示个人扩展能力。
+- Java 实现的 RAG、行程校验和评测模块，用于展示个人扩展能力。
 
 ## 2. 总体架构
 
@@ -144,11 +144,15 @@ flowchart TD
 职责：
 
 - 放置单元测试和集成测试。
-- 当前测试覆盖较弱，主要是一个未完成的 travel plan mapping 测试样例。
+- 覆盖 Java RAG、行程校验和评测 harness 的确定性行为。
+- 通过轻量评测子集检查 Phase 3 数据集和指标输出。
 
 主要文件：
 
 - `src/test/kotlin/com/embabel/example/travel/agent/TravelPlanTest.kt`
+- `src/test/java/com/embabel/tripper/rag/TravelKnowledgeServiceTest.java`
+- `src/test/java/com/embabel/tripper/verification/ItineraryVerificationServiceTest.java`
+- `src/test/java/com/embabel/tripper/eval/TravelEvaluationHarnessTest.java`
 
 ## 4. 核心运行链路
 
@@ -225,13 +229,16 @@ flowchart TD
 │       └── security
 ├── src/main/java
 │   └── com/embabel/tripper
+│       ├── eval
 │       ├── rag
+│       ├── verification
 │       └── web
 ├── src/main/resources
 │   ├── templates
 │   ├── static
 │   └── application*.yml
 ├── src/test/kotlin
+├── evals
 ├── images
 ├── .github/workflows
 ├── Dockerfile
@@ -283,6 +290,8 @@ GitHub Actions CI 配置目录。
 | `README-AI-APPLICATION-PLAN.md` | 个人扩展计划文档，说明如何把项目升级成更适配 AI 应用岗位的作品。 |
 | `infra.md` | 当前文件，说明项目整体架构、分层职责和逐文件职责。 |
 | `README-SECURITY.md` | Google OAuth2 和安全配置说明。 |
+| `evals/README.md` | Phase 3 评测 harness 说明，包含数据集范围、运行命令和输出路径。 |
+| `evals/travel-eval-cases.json` | 30 条旅行规划评测数据，覆盖预算、家庭、无障碍、多国家、兴趣偏好和知识库引用等场景。 |
 | `pom.xml` | Maven 构建文件，定义 Spring Boot、Kotlin、Embabel、OpenAI、MCP、Security、Thymeleaf 和测试依赖。 |
 | `mvnw` / `mvnw.cmd` | Maven Wrapper 启动脚本，用于在未安装 Maven 的机器上运行构建。 |
 | `Dockerfile` | 多阶段 Docker 构建文件，使用 Maven 构建 Spring Boot jar，并在运行阶段启动应用。 |
@@ -335,6 +344,22 @@ GitHub Actions CI 配置目录。
 | `src/main/java/com/embabel/tripper/verification/PlanVerificationResult.java` | 一次行程校验结果，实现 `PromptContributor`，可直接作为 repair prompt 的结构化上下文。 |
 | `src/main/java/com/embabel/tripper/verification/PlanVerificationRepository.java` | 内存校验结果 repository，保存最近 planning run 的校验输出。 |
 | `src/main/java/com/embabel/tripper/verification/ItineraryVerificationService.java` | Java 校验核心服务，负责日期覆盖、地点、路线估算、预算、URL、住宿覆盖等确定性校验。 |
+
+### 6.3.3 Java 评测文件
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/main/java/com/embabel/tripper/eval/TravelEvalCase.java` | 单条旅行评测用例模型，包含 brief、日期、预算、旅客、约束、兴趣、预期国家和主题。 |
+| `src/main/java/com/embabel/tripper/eval/TravelEvalDataset.java` | 从 `evals/travel-eval-cases.json` 加载评测用例。 |
+| `src/main/java/com/embabel/tripper/eval/EvalPlanCandidate.java` | 单次 planner 输出候选结果，承载 verifier 请求、模拟 latency、token cost 和 tool-call 统计。 |
+| `src/main/java/com/embabel/tripper/eval/EvalPlanCandidateFactory.java` | 评测候选计划生成接口，后续可替换为真实 Agent-backed runner。 |
+| `src/main/java/com/embabel/tripper/eval/DeterministicEvalPlanCandidateFactory.java` | 离线确定性候选计划生成器，用于本地和 CI 稳定评测。 |
+| `src/main/java/com/embabel/tripper/eval/EvaluationCaseResult.java` | 单条评测结果，保存状态、覆盖率、校验问题、citation、tool-call 和成本指标。 |
+| `src/main/java/com/embabel/tripper/eval/EvaluationMetrics.java` | 聚合评测指标，包括日期覆盖率、预算/链接问题率、citation 覆盖、tool-call 成功率、平均 latency、成本和 verifier 问题数。 |
+| `src/main/java/com/embabel/tripper/eval/EvaluationReport.java` | 评测报告模型，并生成 Markdown 汇总。 |
+| `src/main/java/com/embabel/tripper/eval/TravelEvaluationHarness.java` | 评测核心流程：选择数据集子集、生成候选计划、调用行程校验器、聚合指标。 |
+| `src/main/java/com/embabel/tripper/eval/TravelEvaluationReportWriter.java` | 将评测报告写为 JSON 和 Markdown 文件。 |
+| `src/main/java/com/embabel/tripper/eval/TravelEvaluationCli.java` | 命令行入口，支持指定数据集、输出目录和 limit。 |
 
 ### 6.4 外部工具和配置文件
 
@@ -399,6 +424,8 @@ GitHub Actions CI 配置目录。
 | --- | --- |
 | `src/test/kotlin/com/embabel/example/travel/agent/TravelPlanTest.kt` | Travel plan 相关测试占位。当前构造了 `ProposedTravelPlan`，但没有实际断言，需要后续补强。 |
 | `src/test/java/com/embabel/tripper/rag/TravelKnowledgeServiceTest.java` | Java RAG 服务测试，验证文档导入、检索、citation 和 prompt context。 |
+| `src/test/java/com/embabel/tripper/verification/ItineraryVerificationServiceTest.java` | Java 行程校验测试，覆盖日期缺口、缺失地点、预算、链接、路线和住宿覆盖检查。 |
+| `src/test/java/com/embabel/tripper/eval/TravelEvaluationHarnessTest.java` | Java 评测 harness 测试，覆盖数据集规模/维度、CI 子集指标和 JSON/Markdown 报告写出。 |
 
 ### 6.11 CI 文件
 
@@ -434,6 +461,9 @@ GitHub Actions CI 配置目录。
 - 根据 `Day.locationAndCountry` 生成 Google Maps 路线链接。
 - 图片 HTML 样式后处理。
 - 图片 URL 有效性检查。
+- RAG 文档切分、内存检索和 citation 上下文构造。
+- 行程日期、地点、路线、预算、链接和住宿一致性校验。
+- 评测数据集加载、离线候选计划生成、指标聚合和报告写出。
 - Spring MVC 页面路由和状态分发。
 
 ### 7.3 外部系统负责的部分
@@ -452,7 +482,7 @@ GitHub Actions CI 配置目录。
 | --- | --- | --- |
 | RAG 知识库 | `src/main/java/com/embabel/tripper/rag` | Java-owned MVP：文档上传、切分、内存 term-vector 检索、citation；后续替换为 embedding/vector store。 |
 | 行程校验器 | `src/main/java/com/embabel/tripper/verification` | Java-owned MVP：日期、预算、路线、链接、住宿一致性校验；后续可替换为 maps-backed verifier。 |
-| Agent 评测 | `src/test/kotlin` 和 `evals/` | 测试集、质量指标、回归报告。 |
+| Agent 评测 | `src/main/java/com/embabel/tripper/eval` 和 `evals/` | Java-owned MVP：30 条数据集、离线确定性 runner、质量指标、JSON/Markdown 报告；后续接真实 Agent runner 和 LLM judge。 |
 | 可观测性 | `src/main/kotlin/com/embabel/tripper/observability` | token、cost、latency、tool call、action trace。 |
 | Guardrails | `src/main/kotlin/com/embabel/tripper/safety` | prompt injection 防护、工具权限、敏感信息脱敏。 |
 | 多轮编辑 | `src/main/kotlin/com/embabel/tripper/editing` | plan version、diff、局部重排、repair loop。 |
