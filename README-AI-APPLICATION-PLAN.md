@@ -202,23 +202,34 @@ User story:
 
 Functional requirements:
 
-- [ ] Track each agent action in a run timeline.
-- [ ] Track model name, prompt size, completion size, token cost, and latency.
-- [ ] Track tool calls, status, input summary, output summary, and error messages.
-- [ ] Add a `/runs/{id}` or similar page to inspect execution history.
-- [ ] Add cost budget warnings and model downgrade behavior.
+- [x] Track each agent action in a run timeline.
+- [x] Track model name, prompt size, completion size, token cost, and latency.
+- [x] Track tool groups, status, input summary, output summary, and error messages.
+- [x] Add a `/runs/{id}` page to inspect execution history.
+- [x] Add cost budget warnings.
+- [ ] Add automatic model downgrade behavior.
 
 Technical requirements:
 
-- [ ] Define an `AgentRunTrace` model.
-- [ ] Capture event data without logging sensitive prompt content by default.
-- [ ] Add configurable verbosity levels for local debugging versus production mode.
+- [x] Define an `AgentRunTrace` model.
+- [x] Capture event data without logging sensitive prompt content by default.
+- [x] Add configurable verbosity levels for local debugging versus production mode.
 
 Acceptance criteria:
 
-- Each itinerary has a traceable execution record.
-- Expensive or failed steps are easy to identify.
-- Cost and latency are visible in the UI or report.
+- [x] Each itinerary has a traceable execution record.
+- [x] Expensive or failed steps are easy to identify.
+- [x] Cost and latency are visible in the UI.
+
+Current implementation note:
+
+- Phase 4 is implemented as a Java-owned AgentOps MVP under `src/main/java/com/embabel/tripper/observability`.
+- Each web planning run creates an in-memory `AgentRunTrace` keyed by the Embabel `agentProcess.id`.
+- The Agent records action-level timeline events for cost confirmation, knowledge retrieval, POI generation, POI research, plan proposal, verification/repair, accommodation lookup, and HTML post-processing.
+- The final status handler enriches the trace with actual Embabel usage, cost, prompt tokens, completion tokens, and models used.
+- `/runs` lists recent traces and `/runs/{id}` shows action timing, model/tool summaries, prompt/output character counts, final cost, token usage, and warnings.
+- Prompt bodies are not stored by default; the trace records summaries and size metrics. Full prompt capture can be enabled locally with `embabel.tripper.observability.capture-prompt-content=true`.
+- Automatic model downgrade is intentionally left for a later enhancement after trace data is available.
 
 Resume value:
 

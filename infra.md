@@ -21,7 +21,7 @@ Tripper 是一个旅行规划 Agent 应用。用户在 Web 表单中输入出发
 - OpenAI 模型调用。
 - MCP 工具调用，包括 Web、Maps、Weather、Browser Automation、Airbnb 等。
 - 结构化领域模型，约束 LLM 输出为可被程序继续处理的数据对象。
-- Java 实现的 RAG、行程校验和评测模块，用于展示个人扩展能力。
+- Java 实现的 RAG、行程校验、评测和可观测性模块，用于展示个人扩展能力。
 
 ## 2. 总体架构
 
@@ -139,7 +139,22 @@ flowchart TD
 - `compose.yaml`
 - `.github/workflows/maven.yml`
 
-### 3.7 Test Layer
+### 3.7 Observability Layer
+
+职责：
+
+- 为每次 Web planning run 创建可回看的 Agent run trace。
+- 记录 action 时间线、状态、工具组、模型摘要、prompt/output 字符规模、错误和最终 usage/cost。
+- 通过 `/runs` 和 `/runs/{id}` 页面查看最近 run 和单次 run 详情。
+- 默认不保存完整 prompt 正文，只保存摘要和计数，降低敏感信息进入历史记录的风险。
+
+主要文件：
+
+- `src/main/java/com/embabel/tripper/observability/**`
+- `src/main/resources/templates/runs.html`
+- `src/main/resources/templates/run-detail.html`
+
+### 3.8 Test Layer
 
 职责：
 
@@ -153,6 +168,7 @@ flowchart TD
 - `src/test/java/com/embabel/tripper/rag/TravelKnowledgeServiceTest.java`
 - `src/test/java/com/embabel/tripper/verification/ItineraryVerificationServiceTest.java`
 - `src/test/java/com/embabel/tripper/eval/TravelEvaluationHarnessTest.java`
+- `src/test/java/com/embabel/tripper/observability/AgentRunTraceServiceTest.java`
 
 ## 4. 核心运行链路
 
@@ -230,6 +246,7 @@ flowchart TD
 ├── src/main/java
 │   └── com/embabel/tripper
 │       ├── eval
+│       ├── observability
 │       ├── rag
 │       ├── verification
 │       └── web
@@ -361,6 +378,19 @@ GitHub Actions CI 配置目录。
 | `src/main/java/com/embabel/tripper/eval/TravelEvaluationReportWriter.java` | 将评测报告写为 JSON 和 Markdown 文件。 |
 | `src/main/java/com/embabel/tripper/eval/TravelEvaluationCli.java` | 命令行入口，支持指定数据集、输出目录和 limit。 |
 
+### 6.3.4 Java 可观测性文件
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/main/java/com/embabel/tripper/observability/AgentRunStatus.java` | Agent run 生命周期状态枚举：`RUNNING`、`COMPLETED`、`FAILED`、`TERMINATED`。 |
+| `src/main/java/com/embabel/tripper/observability/AgentRunEventStatus.java` | 单个 action trace event 状态枚举：`STARTED`、`COMPLETED`、`FAILED`。 |
+| `src/main/java/com/embabel/tripper/observability/AgentRunObservabilityProperties.java` | Phase 4 配置属性，控制开关、摘要长度、保留 run 数、prompt 正文捕获和成本预警阈值。 |
+| `src/main/java/com/embabel/tripper/observability/AgentRunTraceEvent.java` | 单个 action 时间线事件，保存 action 名、状态、耗时、模型、工具组、prompt/output 字符数、摘要和错误。 |
+| `src/main/java/com/embabel/tripper/observability/AgentRunTrace.java` | 单次 Agent run trace，保存 route、预算、最终 cost/token/model 使用、warnings 和 action timeline。 |
+| `src/main/java/com/embabel/tripper/observability/AgentRunTraceRepository.java` | 内存 trace repository，保存最近 run 并按配置裁剪数量。 |
+| `src/main/java/com/embabel/tripper/observability/AgentRunTraceService.java` | 可观测性核心服务，负责创建 run、记录 action start/complete/fail、补最终 usage/cost 和生成成本预警。 |
+| `src/main/java/com/embabel/tripper/observability/AgentRunTraceController.java` | `/runs` 和 `/runs/{id}` 页面 Controller。 |
+
 ### 6.4 外部工具和配置文件
 
 | 文件 | 职责 |
@@ -393,6 +423,8 @@ GitHub Actions CI 配置目录。
 | --- | --- |
 | `src/main/resources/application.yml` | 默认应用配置。定义端口 `8747`、Thymeleaf、静态资源缓存、安全开关、weather tool、Tripper persona、模型和日志级别。 |
 | `src/main/resources/application-docker-ce.yml` | Docker CE / stdio MCP 配置。定义 Brave、fetch、puppeteer、wikipedia、github、google-maps 等 MCP server 的 Docker 启动方式。 |
+| `src/main/resources/templates/runs.html` | 最近 Agent run 列表页，展示 route、状态、成本、action 数和工具组计数。 |
+| `src/main/resources/templates/run-detail.html` | 单次 Agent run trace 详情页，展示摘要、usage/cost、warnings 和 action timeline。 |
 
 ### 6.8 Thymeleaf 页面模板
 
@@ -426,6 +458,7 @@ GitHub Actions CI 配置目录。
 | `src/test/java/com/embabel/tripper/rag/TravelKnowledgeServiceTest.java` | Java RAG 服务测试，验证文档导入、检索、citation 和 prompt context。 |
 | `src/test/java/com/embabel/tripper/verification/ItineraryVerificationServiceTest.java` | Java 行程校验测试，覆盖日期缺口、缺失地点、预算、链接、路线和住宿覆盖检查。 |
 | `src/test/java/com/embabel/tripper/eval/TravelEvaluationHarnessTest.java` | Java 评测 harness 测试，覆盖数据集规模/维度、CI 子集指标和 JSON/Markdown 报告写出。 |
+| `src/test/java/com/embabel/tripper/observability/AgentRunTraceServiceTest.java` | Java 可观测性服务测试，覆盖 action timeline、失败记录、最终 usage/cost 和成本预警。 |
 
 ### 6.11 CI 文件
 
@@ -464,6 +497,7 @@ GitHub Actions CI 配置目录。
 - RAG 文档切分、内存检索和 citation 上下文构造。
 - 行程日期、地点、路线、预算、链接和住宿一致性校验。
 - 评测数据集加载、离线候选计划生成、指标聚合和报告写出。
+- Agent run trace 创建、action timeline 记录、usage/cost 汇总和成本预警。
 - Spring MVC 页面路由和状态分发。
 
 ### 7.3 外部系统负责的部分
@@ -483,7 +517,7 @@ GitHub Actions CI 配置目录。
 | RAG 知识库 | `src/main/java/com/embabel/tripper/rag` | Java-owned MVP：文档上传、切分、内存 term-vector 检索、citation；后续替换为 embedding/vector store。 |
 | 行程校验器 | `src/main/java/com/embabel/tripper/verification` | Java-owned MVP：日期、预算、路线、链接、住宿一致性校验；后续可替换为 maps-backed verifier。 |
 | Agent 评测 | `src/main/java/com/embabel/tripper/eval` 和 `evals/` | Java-owned MVP：30 条数据集、离线确定性 runner、质量指标、JSON/Markdown 报告；后续接真实 Agent runner 和 LLM judge。 |
-| 可观测性 | `src/main/kotlin/com/embabel/tripper/observability` | token、cost、latency、tool call、action trace。 |
+| 可观测性 | `src/main/java/com/embabel/tripper/observability` | Java-owned MVP：action timeline、usage/cost、latency、工具组摘要、成本预警和 `/runs` trace 页面；后续接低层 tool event 和持久化。 |
 | Guardrails | `src/main/kotlin/com/embabel/tripper/safety` | prompt injection 防护、工具权限、敏感信息脱敏。 |
 | 多轮编辑 | `src/main/kotlin/com/embabel/tripper/editing` | plan version、diff、局部重排、repair loop。 |
 

@@ -30,6 +30,7 @@ import com.embabel.common.ai.model.LlmOptions
 import com.embabel.common.util.StringTransformer
 import com.embabel.tripper.BraveImageSearchService
 import com.embabel.tripper.config.ToolsConfig
+import com.embabel.tripper.observability.AgentRunTraceService
 import com.embabel.tripper.rag.TravelKnowledgeContext
 import com.embabel.tripper.rag.TravelKnowledgeService
 import com.embabel.tripper.util.ImageChecker
@@ -66,6 +67,7 @@ class TripperAgent(
     private val braveImageSearch: BraveImageSearchService,
     private val travelKnowledgeService: TravelKnowledgeService,
     private val itineraryVerificationService: ItineraryVerificationService,
+    private val agentRunTraceService: AgentRunTraceService,
 ) {
 
     private val logger = LoggerFactory.getLogger(TripperAgent::class.java)
@@ -82,19 +84,26 @@ class TripperAgent(
         travelers: Travelers,
         context: OperationContext
     ): AcceptanceOfCost {
-        // Confirmation is needed if we came through the MCP route
-        val confirmationNeeded = context.last<TravelersAndBrief>() != null
-        if (!confirmationNeeded) {
-            // Take it as a given
-            return AcceptanceOfCost
+        return tracedAction(
+            context = context,
+            actionName = "confirmExpensiveOperation",
+            inputSummary = "travelers=${travelers.travelers.size}, route=${travelBrief.from}->${travelBrief.to}, dailyBudget=${travelBrief.dailyBudget}",
+            outputSummary = { "accepted" },
+        ) {
+            // Confirmation is needed if we came through the MCP route
+            val confirmationNeeded = context.last<TravelersAndBrief>() != null
+            if (!confirmationNeeded) {
+                // Take it as a given
+                return@tracedAction AcceptanceOfCost
+            }
+            // Otherwise, explicitly ask the user for confirmation
+            confirm(
+                AcceptanceOfCost,
+                "Go ahead? Building a travel plan for ${
+                    travelers.travelers.map { it.name }.joinToString { " and " }
+                } will cost up to 20c"
+            )
         }
-        // Otherwise, explicitly ask the user for confirmation
-        return confirm(
-            AcceptanceOfCost,
-            "Go ahead? Building a travel plan for ${
-                travelers.travelers.map { it.name }.joinToString { " and " }
-            } will cost up to 20c"
-        )
     }
 
 
@@ -102,15 +111,23 @@ class TripperAgent(
     fun retrieveTravelKnowledge(
         travelBrief: JourneyTravelBrief,
         travelers: Travelers,
+        context: OperationContext,
     ): TravelKnowledgeContext {
-        val query = buildString {
-            append("${travelBrief.from} ${travelBrief.to} ${travelBrief.transportPreference} ")
-            append("${travelBrief.departureDate} ${travelBrief.returnDate} ")
-            append(travelBrief.brief)
-            append(' ')
-            append(travelers.travelers.joinToString(" ") { "${it.name} ${it.about}" })
+        return tracedAction(
+            context = context,
+            actionName = "retrieveTravelKnowledge",
+            inputSummary = "briefCharacters=${travelBrief.brief.length}, travelers=${travelers.travelers.size}",
+            outputSummary = { "hits=${it.hits.size}" },
+        ) {
+            val query = buildString {
+                append("${travelBrief.from} ${travelBrief.to} ${travelBrief.transportPreference} ")
+                append("${travelBrief.departureDate} ${travelBrief.returnDate} ")
+                append(travelBrief.brief)
+                append(' ')
+                append(travelers.travelers.joinToString(" ") { "${it.name} ${it.about}" })
+            }
+            travelKnowledgeService.retrieveForQuery(query, 6)
         }
-        return travelKnowledgeService.retrieveForQuery(query, 6)
     }
 
     @Action
@@ -120,19 +137,7 @@ class TripperAgent(
         knowledgeContext: TravelKnowledgeContext,
         context: OperationContext,
     ): ItineraryIdeas {
-        return context.ai()
-            .withLlm(config.thinkerLlm)
-            .withPromptElements(
-                config.planner,
-                travelers,
-            ).withTools(
-                CoreToolGroups.WEB,
-                CoreToolGroups.MAPS,
-                CoreToolGroups.MATH,
-                WEATHER_TOOLS,
-            )
-            .create(
-                prompt = """
+        val prompt = """
                 Consider the following travel brief for a journey from ${travelBrief.from} to ${travelBrief.to}.
                 ${travelBrief.contribution()}
                 Find points of interest that are relevant to the travel brief and travelers.
@@ -142,8 +147,32 @@ class TripperAgent(
                 
                 Consider this user-provided travel knowledge when relevant:
                 ${knowledgeContext.contribution()}
-            """.trimIndent(),
-            )
+            """.trimIndent()
+        return tracedAction(
+            context = context,
+            actionName = "findPointsOfInterest",
+            inputSummary = "route=${travelBrief.from}->${travelBrief.to}, knowledgeHits=${knowledgeContext.hits.size}",
+            modelName = modelName(config.thinkerLlm),
+            promptCharacters = prompt.length,
+            toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH, WEATHER_TOOLS),
+            outputSummary = { "pointsOfInterest=${it.pointsOfInterest.size}" },
+            completionCharacters = { it.pointsOfInterest.sumOf { poi -> poi.name.length + poi.description.length } },
+        ) {
+            context.ai()
+                .withLlm(config.thinkerLlm)
+                .withPromptElements(
+                    config.planner,
+                    travelers,
+                ).withTools(
+                    CoreToolGroups.WEB,
+                    CoreToolGroups.MAPS,
+                    CoreToolGroups.MATH,
+                    WEATHER_TOOLS,
+                )
+                .create(
+                    prompt = prompt,
+                )
+        }
     }
 
     @Action
@@ -155,25 +184,39 @@ class TripperAgent(
         confirmation: AcceptanceOfCost,
         context: OperationContext,
     ): PointOfInterestFindings {
-        logger.info(
-            "Researching {} points of interest: {}",
-            itineraryIdeas.pointsOfInterest.size,
-            itineraryIdeas.pointsOfInterest.sortedBy { it.name }.joinToString { it.name },
-        )
-        val promptRunner = config.researcher.promptRunner(context)
-            .withPromptElements(travelers, config.toolCallControl)
-            .withTools(
-                CoreToolGroups.WEB,
-                CoreToolGroups.BROWSER_AUTOMATION,
-                WEATHER_TOOLS,
+        val estimatedPromptCharacters = itineraryIdeas.pointsOfInterest.sumOf {
+            520 + travelBrief.brief.length + it.name.length + it.description.length +
+                    it.location.length + knowledgeContext.contribution().length
+        }
+        return tracedAction(
+            context = context,
+            actionName = "researchPointsOfInterest",
+            inputSummary = "pointsOfInterest=${itineraryIdeas.pointsOfInterest.size}, maxConcurrency=${config.maxConcurrency}",
+            modelName = "researcher",
+            promptCharacters = estimatedPromptCharacters,
+            toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.BROWSER_AUTOMATION, WEATHER_TOOLS, "braveImageSearch"),
+            outputSummary = { "researched=${it.pointsOfInterest.size}" },
+            completionCharacters = { it.pointsOfInterest.sumOf { finding -> finding.research.length } },
+        ) {
+            logger.info(
+                "Researching {} points of interest: {}",
+                itineraryIdeas.pointsOfInterest.size,
+                itineraryIdeas.pointsOfInterest.sortedBy { it.name }.joinToString { it.name },
             )
-            .withToolObject(braveImageSearch)
-        val poiFindings = context.parallelMap(
-            itineraryIdeas.pointsOfInterest,
-            maxConcurrency = config.maxConcurrency,
-        ) { poi ->
-            val rpi = promptRunner.create<ResearchedPointOfInterest>(
-                prompt = """
+            val promptRunner = config.researcher.promptRunner(context)
+                .withPromptElements(travelers, config.toolCallControl)
+                .withTools(
+                    CoreToolGroups.WEB,
+                    CoreToolGroups.BROWSER_AUTOMATION,
+                    WEATHER_TOOLS,
+                )
+                .withToolObject(braveImageSearch)
+            val poiFindings = context.parallelMap(
+                itineraryIdeas.pointsOfInterest,
+                maxConcurrency = config.maxConcurrency,
+            ) { poi ->
+                val rpi = promptRunner.create<ResearchedPointOfInterest>(
+                    prompt = """
                 Research the following point of interest.
                 Consider interesting stories about art and culture and famous people.
                 Your audience: ${travelBrief.brief}
@@ -192,12 +235,13 @@ class TripperAgent(
                 User-provided travel knowledge that may be relevant:
                 ${knowledgeContext.contribution()}
             """.trimIndent(),
+                )
+                rpi
+            }
+            PointOfInterestFindings(
+                pointsOfInterest = poiFindings,
             )
-            rpi
         }
-        return PointOfInterestFindings(
-            pointsOfInterest = poiFindings,
-        )
     }
 
     /**
@@ -211,13 +255,7 @@ class TripperAgent(
         poiFindings: PointOfInterestFindings,
         context: OperationContext,
     ): ProposedTravelPlan {
-        return config.planner.promptRunner(context)
-            .withTools(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
-            .withPromptElements(
-                travelers, ResponseFormat.HTML,
-            )
-            .create(
-                prompt = """
+        val prompt = """
                 Given the following travel brief, create a detailed plan.
                 Give it a brief, catchy title that doesn't include dates,
                 but may consider season, mood or relate to travelers's interests.
@@ -269,8 +307,26 @@ class TripperAgent(
                 """.trimIndent()
                     }
                 }
-            """.trimIndent(),
-            )
+            """.trimIndent()
+        return tracedAction(
+            context = context,
+            actionName = "proposeTravelPlan",
+            inputSummary = "poiFindings=${poiFindings.pointsOfInterest.size}, knowledgeHits=${knowledgeContext.hits.size}",
+            modelName = "planner",
+            promptCharacters = prompt.length,
+            toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH),
+            outputSummary = { "title=${it.title}, days=${it.days.size}, links=${it.pageLinks.size + it.imageLinks.size + it.videoLinks.size}" },
+            completionCharacters = { it.plan.length },
+        ) {
+            config.planner.promptRunner(context)
+                .withTools(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
+                .withPromptElements(
+                    travelers, ResponseFormat.HTML,
+                )
+                .create(
+                    prompt = prompt,
+                )
+        }
     }
 
     @Action
@@ -282,29 +338,33 @@ class TripperAgent(
         proposedPlan: ProposedTravelPlan,
         context: OperationContext,
     ): VerifiedTravelPlanProposal {
-        val verificationRequest = verificationRequest(
-            brief = travelBrief,
-            plan = proposedPlan,
-            stays = emptyList(),
-        )
-        val verification = itineraryVerificationService.verifyProposal(verificationRequest)
-        if (!verification.isHasErrors()) {
-            return VerifiedTravelPlanProposal(proposedPlan, verification)
-        }
-
-        logger.warn(
-            "Repairing travel plan after verifier found {} error(s): {}",
-            verification.errorCount,
-            verification.issues.joinToString { "${it.category}:${it.message}" },
-        )
-
-        val repairedPlan = config.planner.promptRunner(context)
-            .withTools(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
-            .withPromptElements(
-                travelers, ResponseFormat.HTML,
+        return tracedAction(
+            context = context,
+            actionName = "verifyAndRepairTravelPlan",
+            inputSummary = "days=${proposedPlan.days.size}, links=${proposedPlan.pageLinks.size + proposedPlan.imageLinks.size + proposedPlan.videoLinks.size}",
+            modelName = "planner",
+            promptCharacters = proposedPlan.plan.length,
+            toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH),
+            outputSummary = { "status=${it.verificationResult.status}, repaired=${it.isRepaired()}, errors=${it.verificationResult.errorCount}" },
+            completionCharacters = { it.proposal.plan.length },
+        ) {
+            val verificationRequest = verificationRequest(
+                brief = travelBrief,
+                plan = proposedPlan,
+                stays = emptyList(),
             )
-            .create<ProposedTravelPlan>(
-                prompt = """
+            val verification = itineraryVerificationService.verifyProposal(verificationRequest)
+            if (!verification.isHasErrors()) {
+                return@tracedAction VerifiedTravelPlanProposal(proposedPlan, verification)
+            }
+
+            logger.warn(
+                "Repairing travel plan after verifier found {} error(s): {}",
+                verification.errorCount,
+                verification.issues.joinToString { "${it.category}:${it.message}" },
+            )
+
+            val repairPrompt = """
                 The itinerary verifier found blocking issues in the proposed travel plan.
                 Repair the plan before it is shown to the user.
 
@@ -344,19 +404,27 @@ class TripperAgent(
                 """.trimIndent()
                     }
                 }
-            """.trimIndent(),
-            )
+            """.trimIndent()
+            val repairedPlan = config.planner.promptRunner(context)
+                .withTools(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
+                .withPromptElements(
+                    travelers, ResponseFormat.HTML,
+                )
+                .create<ProposedTravelPlan>(
+                    prompt = repairPrompt,
+                )
 
-        val repairedVerification = itineraryVerificationService.verifyProposal(
-            verificationRequest(
-                brief = travelBrief,
-                plan = repairedPlan,
-                stays = emptyList(),
-            ),
-            true,
-            1,
-        )
-        return VerifiedTravelPlanProposal(repairedPlan, repairedVerification)
+            val repairedVerification = itineraryVerificationService.verifyProposal(
+                verificationRequest(
+                    brief = travelBrief,
+                    plan = repairedPlan,
+                    stays = emptyList(),
+                ),
+                true,
+                1,
+            )
+            VerifiedTravelPlanProposal(repairedPlan, repairedVerification)
+        }
     }
 
     @Action
@@ -375,15 +443,28 @@ class TripperAgent(
             )
         }.sortedBy { it.days.first().date }
         val dailyAccommodationBudget = brief.dailyBudget / 2.0
+        val estimatedPromptCharacters = stays.sumOf { stay ->
+            360 + stay.stayingAt().length + stay.days.size * 12
+        }
 
-        val stayFinderPromptRunner = config.researcher.promptRunner(context)
-            .withPromptContributor(travelers)
-            .withTools(ToolsConfig.AIRBNB, CoreToolGroups.MATH)
-        val foundStays = context.parallelMap(stays, maxConcurrency = config.maxConcurrency) { stay ->
-            logger.info("Finding Airbnb options for stay at: {}", stay.locationAndCountry())
-            val airbnbResults = stayFinderPromptRunner
-                .create<AirbnbResultsLlmReturn>(
-                    prompt = """
+        return tracedAction(
+            context = context,
+            actionName = "findPlacesToSleep",
+            inputSummary = "stays=${stays.size}, dailyAccommodationBudget=$dailyAccommodationBudget",
+            modelName = "researcher",
+            promptCharacters = estimatedPromptCharacters,
+            toolNames = listOf(ToolsConfig.AIRBNB, CoreToolGroups.MATH),
+            outputSummary = { "stays=${it.stays.size}, verification=${it.verificationResult.status}" },
+            completionCharacters = { it.stays.sumOf { stay -> stay.airbnbUrl?.length ?: 0 } },
+        ) {
+            val stayFinderPromptRunner = config.researcher.promptRunner(context)
+                .withPromptContributor(travelers)
+                .withTools(ToolsConfig.AIRBNB, CoreToolGroups.MATH)
+            val foundStays = context.parallelMap(stays, maxConcurrency = config.maxConcurrency) { stay ->
+                logger.info("Finding Airbnb options for stay at: {}", stay.locationAndCountry())
+                val airbnbResults = stayFinderPromptRunner
+                    .create<AirbnbResultsLlmReturn>(
+                        prompt = """
                 Find the Airbnb search URL for the following stay using the available tools.
                 Staying at location: ${stay.stayingAt()}
                 Dates: ${stay.days.joinToString { it.date.toString() }}
@@ -391,30 +472,31 @@ class TripperAgent(
                 Try to stay under the following daily budget (USD): $dailyAccommodationBudget
                 If no suitable options are found under that, return the cheapest available options.
             """.trimIndent(),
+                    )
+                stay.copy(
+                    airbnbUrl = airbnbResults.searchUrl,
                 )
-            stay.copy(
-                airbnbUrl = airbnbResults.searchUrl,
+            }
+
+            val finalVerification = itineraryVerificationService.verifyTravelPlan(
+                verificationRequest(
+                    brief = brief,
+                    plan = plan,
+                    stays = foundStays,
+                ),
+                verifiedProposal.isRepaired(),
+                verifiedProposal.repairAttempts(),
+            )
+
+            TravelPlan(
+                brief = brief,
+                proposal = plan,
+                stays = foundStays,
+                travelers = travelers,
+                knowledgeContext = knowledgeContext,
+                verificationResult = finalVerification,
             )
         }
-
-        val finalVerification = itineraryVerificationService.verifyTravelPlan(
-            verificationRequest(
-                brief = brief,
-                plan = plan,
-                stays = foundStays,
-            ),
-            verifiedProposal.isRepaired(),
-            verifiedProposal.repairAttempts(),
-        )
-
-        return TravelPlan(
-            brief = brief,
-            proposal = plan,
-            stays = foundStays,
-            travelers = travelers,
-            knowledgeContext = knowledgeContext,
-            verificationResult = finalVerification,
-        )
     }
 
     @AchievesGoal(
@@ -427,19 +509,28 @@ class TripperAgent(
     )
     @Action
     fun postProcessHtml(
-        plan: TravelPlan
+        plan: TravelPlan,
+        context: OperationContext,
     ): TravelPlan {
-        val oldPlan = plan.proposal.plan
-        return plan.copy(
-            proposal = plan.proposal.copy(
-                plan = StringTransformer.transform(
-                    oldPlan, listOf(
-                        styleImages,
-                        ImageChecker.removeInvalidImageLinks,
-                    )
+        return tracedAction(
+            context = context,
+            actionName = "postProcessHtml",
+            inputSummary = "htmlCharacters=${plan.proposal.plan.length}, imageLinks=${plan.proposal.imageLinks.size}",
+            outputSummary = { "htmlCharacters=${it.proposal.plan.length}" },
+            completionCharacters = { it.proposal.plan.length },
+        ) {
+            val oldPlan = plan.proposal.plan
+            plan.copy(
+                proposal = plan.proposal.copy(
+                    plan = StringTransformer.transform(
+                        oldPlan, listOf(
+                            styleImages,
+                            ImageChecker.removeInvalidImageLinks,
+                        )
+                    ),
                 ),
-            ),
-        )
+            )
+        }
     }
 
     private val styleImages = StringTransformer { html ->
@@ -448,6 +539,47 @@ class TripperAgent(
             "<img class=\"styled-image-thick\""
         )
     }
+
+    private fun <T> tracedAction(
+        context: OperationContext,
+        actionName: String,
+        inputSummary: String,
+        modelName: String? = null,
+        promptCharacters: Int? = null,
+        toolNames: List<String> = emptyList(),
+        outputSummary: (T) -> String,
+        completionCharacters: (T) -> Int? = { null },
+        block: () -> T,
+    ): T {
+        val runId = context.agentProcess.id
+        val eventId = agentRunTraceService.startAction(
+            runId,
+            actionName,
+            inputSummary,
+            modelName,
+            promptCharacters,
+            toolNames,
+        )
+        return try {
+            val result = block()
+            agentRunTraceService.completeAction(
+                runId,
+                eventId,
+                outputSummary(result),
+                completionCharacters(result),
+            )
+            result
+        } catch (ex: RuntimeException) {
+            agentRunTraceService.failAction(runId, eventId, ex.message ?: ex::class.simpleName)
+            throw ex
+        } catch (ex: Error) {
+            agentRunTraceService.failAction(runId, eventId, ex.message ?: ex::class.simpleName)
+            throw ex
+        }
+    }
+
+    private fun modelName(options: LlmOptions): String? =
+        options.model ?: options.role ?: options.criteria.toString()
 
     private fun verificationRequest(
         brief: JourneyTravelBrief,

@@ -47,6 +47,12 @@ embabel:
     word-count: 1200
     image-width: 850
     max-concurrency: 12
+    observability:
+      enabled: true
+      capture-prompt-content: false
+      max-summary-characters: 240
+      max-runs: 100
+      cost-warning-threshold-usd: 0.15
 
     # Anthropic models will give better results but are more expensive
     thinker-llm:

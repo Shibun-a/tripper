@@ -15,6 +15,7 @@ The current goal of this fork is to evolve the baseline demo into a stronger AI 
 - Java-owned Phase 1 RAG MVP under `src/main/java/com/embabel/tripper/rag`, with document import, chunking, retrieval, prompt injection into the Agent workflow, and retrieval debug pages.
 - Java-owned Phase 2 itinerary verifier MVP under `src/main/java/com/embabel/tripper/verification`, with structured verification issues, route/budget/date/link/stay checks, a one-shot Agent repair loop, UI verification summary, and unit tests.
 - Java-owned Phase 3 evaluation MVP under `src/main/java/com/embabel/tripper/eval`, with a 30-case travel dataset, deterministic regression metrics, JSON/Markdown reports, and CI-friendly unit tests.
+- Java-owned Phase 4 observability MVP under `src/main/java/com/embabel/tripper/observability`, with per-run action timelines, final usage/cost capture, cost warnings, and `/runs` trace pages.
 
 ## Attribution
 

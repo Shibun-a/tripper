@@ -23,6 +23,7 @@ import com.embabel.agent.web.htmx.GenericProcessingValues
 import com.embabel.tripper.agent.JourneyTravelBrief
 import com.embabel.tripper.agent.Traveler
 import com.embabel.tripper.agent.Travelers
+import com.embabel.tripper.observability.AgentRunTraceService
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -37,6 +38,7 @@ import java.time.Period
 @RequestMapping(value = ["/", "/travel/journey"])
 class JourneyHtmxController(
     private val agentPlatform: AgentPlatform,
+    private val agentRunTraceService: AgentRunTraceService,
 ) {
 
     data class JourneyPlanForm(
@@ -106,6 +108,14 @@ class JourneyHtmxController(
                 )
             ),
             travelBrief, travelers
+        )
+        agentRunTraceService.createRun(
+            agentProcess.id,
+            "${form.from} to ${form.to}",
+            form.from,
+            form.to,
+            form.dailyBudget,
+            "briefCharacters=${form.brief.length}, travelers=${travelers.travelers.size}, dates=${form.departureDate} to ${form.returnDate}",
         )
 
         model.addAttribute("travelBrief", travelBrief)

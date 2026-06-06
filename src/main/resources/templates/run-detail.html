@@ -1,0 +1,100 @@
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{common/layout :: layout(~{::title}, ~{::section})}">
+<head>
+    <title th:text="${trace.title}">Agent Run Trace</title>
+</head>
+<body>
+<section>
+    <h2 th:text="${trace.title}"></h2>
+
+    <p>
+        <a href="/runs">All runs</a>
+        <span style="margin: 0 0.5rem;">/</span>
+        <a href="/travel/journey">Planner</a>
+    </p>
+
+    <h3>Summary</h3>
+    <table style="width: 100%; margin-bottom: 1.5rem;">
+        <tbody>
+        <tr>
+            <th style="text-align: left;">Run ID</th>
+            <td th:text="${trace.runId}"></td>
+        </tr>
+        <tr>
+            <th style="text-align: left;">Status</th>
+            <td th:text="${trace.status}"></td>
+        </tr>
+        <tr>
+            <th style="text-align: left;">Route</th>
+            <td th:text="${trace.fromLocation + ' -> ' + trace.toLocation}"></td>
+        </tr>
+        <tr>
+            <th style="text-align: left;">Daily Budget</th>
+            <td th:text="${'$' + #numbers.formatDecimal(trace.dailyBudget, 1, 0)}"></td>
+        </tr>
+        <tr>
+            <th style="text-align: left;">Input Summary</th>
+            <td th:text="${trace.inputSummary}"></td>
+        </tr>
+        <tr>
+            <th style="text-align: left;">Duration</th>
+            <td th:text="${trace.totalDurationMs == null ? 'running' : trace.totalDurationMs + ' ms'}"></td>
+        </tr>
+        <tr>
+            <th style="text-align: left;">Cost</th>
+            <td th:text="${trace.costUsd == null ? 'n/a' : '$' + #numbers.formatDecimal(trace.costUsd, 1, 4)}"></td>
+        </tr>
+        <tr>
+            <th style="text-align: left;">Tokens</th>
+            <td th:text="${'prompt=' + (trace.promptTokens == null ? 'n/a' : trace.promptTokens) + ', completion=' + (trace.completionTokens == null ? 'n/a' : trace.completionTokens)}"></td>
+        </tr>
+        <tr>
+            <th style="text-align: left;">Models</th>
+            <td th:text="${trace.modelsUsedSummary}"></td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div th:if="${trace.hasWarnings}" style="margin-bottom: 1.5rem;">
+        <h3>Warnings</h3>
+        <ul>
+            <li th:each="warning : ${trace.warnings}" th:text="${warning}"></li>
+        </ul>
+    </div>
+
+    <h3>Timeline</h3>
+    <table style="width: 100%; margin-bottom: 1.5rem;">
+        <thead>
+        <tr>
+            <th style="text-align: left;">Action</th>
+            <th style="text-align: left;">Status</th>
+            <th style="text-align: right;">Duration</th>
+            <th style="text-align: right;">Prompt Chars</th>
+            <th style="text-align: right;">Completion Chars</th>
+            <th style="text-align: left;">Tools</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="event : ${trace.events}">
+            <td>
+                <strong th:text="${event.actionName}"></strong>
+                <small style="display: block;" th:text="${event.inputSummary}"></small>
+                <small th:if="${event.outputSummary != null}" style="display: block;"
+                       th:text="${event.outputSummary}"></small>
+                <small th:if="${event.errorMessage != null}" style="display: block;"
+                       th:text="${event.errorMessage}"></small>
+            </td>
+            <td th:text="${event.status}"></td>
+            <td style="text-align: right;"
+                th:text="${event.durationMs == null ? 'running' : event.durationMs + ' ms'}"></td>
+            <td style="text-align: right;"
+                th:text="${event.promptCharacters == null ? 'n/a' : event.promptCharacters}"></td>
+            <td style="text-align: right;"
+                th:text="${event.completionCharacters == null ? 'n/a' : event.completionCharacters}"></td>
+            <td th:text="${event.toolNamesSummary}"></td>
+        </tr>
+        </tbody>
+    </table>
+</section>
+</body>
+</html>

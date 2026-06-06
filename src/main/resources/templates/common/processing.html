@@ -25,6 +25,10 @@
                             class="scary-delete-btn">
                         Kill Process
                     </button>
+                    <a th:href="@{/runs/{id}(id=${processId})}" target="_blank" rel="noopener noreferrer"
+                       class="submit-btn" style="margin-left: 0.75rem;">
+                        Inspect Run Trace
+                    </a>
                 </div>
                 <div class="spinner"></div>
             </div>

@@ -1,0 +1,44 @@
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{common/layout :: layout(~{::title}, ~{::section})}">
+<head>
+    <title>Agent Runs</title>
+</head>
+<body>
+<section>
+    <h2>Agent Runs</h2>
+
+    <p th:if="${#lists.isEmpty(runs)}">No agent runs have been recorded in this process.</p>
+
+    <table th:if="${!#lists.isEmpty(runs)}" style="width: 100%; margin-bottom: 1.5rem;">
+        <thead>
+        <tr>
+            <th style="text-align: left;">Run</th>
+            <th style="text-align: left;">Route</th>
+            <th style="text-align: left;">Status</th>
+            <th style="text-align: right;">Cost</th>
+            <th style="text-align: right;">Actions</th>
+            <th style="text-align: right;">Tools</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="run : ${runs}">
+            <td>
+                <a th:href="@{/runs/{id}(id=${run.runId})}" th:text="${run.title}"></a>
+                <small style="display: block;" th:text="${run.runId}"></small>
+            </td>
+            <td th:text="${run.fromLocation + ' -> ' + run.toLocation}"></td>
+            <td th:text="${run.status}"></td>
+            <td style="text-align: right;"
+                th:text="${run.costUsd == null ? 'n/a' : '$' + #numbers.formatDecimal(run.costUsd, 1, 4)}"></td>
+            <td style="text-align: right;" th:text="${run.completedActionCount}"></td>
+            <td style="text-align: right;" th:text="${run.estimatedToolCallCount}"></td>
+        </tr>
+        </tbody>
+    </table>
+
+    <p>
+        <a href="/travel/journey">Back to planner</a>
+    </p>
+</section>
+</body>
+</html>

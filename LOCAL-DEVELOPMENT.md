@@ -232,6 +232,51 @@ Current limitations:
 - The default runner is deterministic and offline; it does not call the real Agent or LLM.
 - LLM-judge qualitative scoring is planned but not implemented.
 
+## Agent Run Observability
+
+Phase 4 adds an in-memory AgentOps trace for each planning run.
+
+Recent runs:
+
+```text
+http://localhost:8747/runs
+```
+
+Single run:
+
+```text
+http://localhost:8747/runs/{processId}
+```
+
+The planning and result pages also link to the run trace when a process id is available.
+
+Implementation path:
+
+```text
+src/main/java/com/embabel/tripper/observability
+src/main/resources/templates/runs.html
+src/main/resources/templates/run-detail.html
+```
+
+Default configuration:
+
+```yaml
+embabel:
+  tripper:
+    observability:
+      enabled: true
+      capture-prompt-content: false
+      max-summary-characters: 240
+      max-runs: 100
+      cost-warning-threshold-usd: 0.15
+```
+
+Current limitations:
+
+- Traces are stored in memory and reset when the app restarts.
+- Tool tracking records configured tool groups per action, not every low-level tool request/response.
+- The app emits cost warnings, but automatic model downgrade is not implemented yet.
+
 ## Useful Files
 
 - `README.md`: project overview and quick start.

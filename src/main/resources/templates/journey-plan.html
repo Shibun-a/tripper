@@ -16,6 +16,10 @@
                class="submit-btn">
                 Plan Another Journey
             </a>
+            <a th:if="${agentProcess != null}" th:href="@{/runs/{id}(id=${agentProcess.id})}"
+               class="submit-btn" style="margin-left: 0.5rem;">
+                Inspect Run Trace
+            </a>
         </div>
 
 
