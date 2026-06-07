@@ -21,7 +21,7 @@ Tripper 是一个旅行规划 Agent 应用。用户在 Web 表单中输入出发
 - OpenAI 模型调用。
 - MCP 工具调用，包括 Web、Maps、Weather、Browser Automation、Airbnb 等。
 - 结构化领域模型，约束 LLM 输出为可被程序继续处理的数据对象。
-- Java 实现的 RAG、行程校验、评测、可观测性和安全模块，用于展示个人扩展能力。
+- Java 实现的 RAG、行程校验、评测、可观测性、安全和编辑模块，用于展示个人扩展能力。
 
 ## 2. 总体架构
 
@@ -168,7 +168,22 @@ flowchart TD
 
 - `src/main/java/com/embabel/tripper/safety/**`
 
-### 3.9 Test Layer
+### 3.9 Plan Editing Layer
+
+职责：
+
+- 保存完成后的旅行计划版本。
+- 支持按全局或单日范围提交编辑指令。
+- 生成 day-level diff 和版本历史。
+- 保留原始 route、date、budget 和 brief 约束。
+- 每次编辑后重新运行行程 verifier。
+
+主要文件：
+
+- `src/main/java/com/embabel/tripper/editing/**`
+- `src/main/resources/templates/plan-edit.html`
+
+### 3.10 Test Layer
 
 职责：
 
@@ -185,6 +200,7 @@ flowchart TD
 - `src/test/java/com/embabel/tripper/observability/AgentRunTraceServiceTest.java`
 - `src/test/java/com/embabel/tripper/safety/ContentSafetyServiceTest.java`
 - `src/test/java/com/embabel/tripper/safety/ToolSafetyServiceTest.java`
+- `src/test/java/com/embabel/tripper/editing/PlanEditingServiceTest.java`
 
 ## 4. 核心运行链路
 
@@ -261,6 +277,7 @@ flowchart TD
 │       └── security
 ├── src/main/java
 │   └── com/embabel/tripper
+│       ├── editing
 │       ├── eval
 │       ├── observability
 │       ├── rag
@@ -421,6 +438,19 @@ GitHub Actions CI 配置目录。
 | `src/main/java/com/embabel/tripper/safety/ToolSafetyProperties.java` | 工具安全配置属性，定义单 action 工具预算和高风险工具组。 |
 | `src/main/java/com/embabel/tripper/safety/ToolSafetyService.java` | 生成 Agent prompt 中的工具安全策略，并识别需要确认的高风险工具组。 |
 
+### 6.3.6 Java 计划编辑文件
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/main/java/com/embabel/tripper/editing/EditableItineraryDay.java` | 可编辑计划中的每日行程 DTO，保存日期、地点和编辑备注。 |
+| `src/main/java/com/embabel/tripper/editing/PlanEditChange.java` | 单条 day-level diff，记录日期、编辑前内容和编辑后内容。 |
+| `src/main/java/com/embabel/tripper/editing/PlanEditDiff.java` | 单次编辑 diff 汇总，包含摘要和变更列表。 |
+| `src/main/java/com/embabel/tripper/editing/PlanEditVersion.java` | 计划版本模型，保存版本号、编辑指令、HTML、days、diff 和 verifier 结果。 |
+| `src/main/java/com/embabel/tripper/editing/PlanEditSession.java` | 单个 planning process 的编辑会话，保存原始约束和全部版本。 |
+| `src/main/java/com/embabel/tripper/editing/PlanEditingRepository.java` | 内存编辑会话 repository。 |
+| `src/main/java/com/embabel/tripper/editing/PlanEditingService.java` | 计划编辑核心服务，负责创建 session、应用全局/单日编辑、生成 diff 并重跑 verifier。 |
+| `src/main/java/com/embabel/tripper/editing/PlanEditController.java` | `/plans/{runId}/edit` 编辑页面 Controller。 |
+
 ### 6.4 外部工具和配置文件
 
 | 文件 | 职责 |
@@ -455,6 +485,7 @@ GitHub Actions CI 配置目录。
 | `src/main/resources/application-docker-ce.yml` | Docker CE / stdio MCP 配置。定义 Brave、fetch、puppeteer、wikipedia、github、google-maps 等 MCP server 的 Docker 启动方式。 |
 | `src/main/resources/templates/runs.html` | 最近 Agent run 列表页，展示 route、状态、成本、action 数和工具组计数。 |
 | `src/main/resources/templates/run-detail.html` | 单次 Agent run trace 详情页，展示摘要、usage/cost、warnings 和 action timeline。 |
+| `src/main/resources/templates/plan-edit.html` | 计划编辑页面，展示约束、编辑表单、最新版本、diff、day notes、verifier 状态和版本历史。 |
 
 ### 6.8 Thymeleaf 页面模板
 
@@ -491,6 +522,7 @@ GitHub Actions CI 配置目录。
 | `src/test/java/com/embabel/tripper/observability/AgentRunTraceServiceTest.java` | Java 可观测性服务测试，覆盖 action timeline、失败记录、最终 usage/cost 和成本预警。 |
 | `src/test/java/com/embabel/tripper/safety/ContentSafetyServiceTest.java` | Java 内容安全测试，覆盖 prompt injection 检测、敏感信息脱敏、HTML 链接过滤和 URL 安全判断。 |
 | `src/test/java/com/embabel/tripper/safety/ToolSafetyServiceTest.java` | Java 工具安全测试，覆盖 prompt policy 生成和高风险工具组识别。 |
+| `src/test/java/com/embabel/tripper/editing/PlanEditingServiceTest.java` | Java 计划编辑测试，覆盖原始版本创建、单日编辑、全局编辑、diff 和 verifier 重跑。 |
 
 ### 6.11 CI 文件
 
@@ -531,6 +563,7 @@ GitHub Actions CI 配置目录。
 - 评测数据集加载、离线候选计划生成、指标聚合和报告写出。
 - Agent run trace 创建、action timeline 记录、usage/cost 汇总和成本预警。
 - 不可信 RAG 内容检测、prompt injection 规则识别、敏感信息脱敏、工具安全 prompt policy 和 unsafe link 过滤。
+- 计划编辑 session、版本管理、day-level diff 和编辑后 verifier 重跑。
 - Spring MVC 页面路由和状态分发。
 
 ### 7.3 外部系统负责的部分
@@ -552,7 +585,7 @@ GitHub Actions CI 配置目录。
 | Agent 评测 | `src/main/java/com/embabel/tripper/eval` 和 `evals/` | Java-owned MVP：30 条数据集、离线确定性 runner、质量指标、JSON/Markdown 报告；后续接真实 Agent runner 和 LLM judge。 |
 | 可观测性 | `src/main/java/com/embabel/tripper/observability` | Java-owned MVP：action timeline、usage/cost、latency、工具组摘要、成本预警和 `/runs` trace 页面；后续接低层 tool event 和持久化。 |
 | Guardrails | `src/main/java/com/embabel/tripper/safety` | Java-owned MVP：prompt injection 检测、不可信 RAG 包装、工具 policy、敏感信息脱敏、unsafe link 过滤；后续接低层 tool callback allow/block。 |
-| 多轮编辑 | `src/main/kotlin/com/embabel/tripper/editing` | plan version、diff、局部重排、repair loop。 |
+| 多轮编辑 | `src/main/java/com/embabel/tripper/editing` | Java-owned MVP：plan version、day-level diff、局部编辑、约束保持、verifier rerun；后续接 LLM-backed rewrite action。 |
 
 ## 9. 本地运行入口
 

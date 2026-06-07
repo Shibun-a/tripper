@@ -20,6 +20,10 @@
                class="submit-btn" style="margin-left: 0.5rem;">
                 Inspect Run Trace
             </a>
+            <a th:if="${agentProcess != null}" th:href="@{/plans/{id}/edit(id=${agentProcess.id})}"
+               class="submit-btn" style="margin-left: 0.5rem;">
+                Edit This Plan
+            </a>
         </div>
 
 

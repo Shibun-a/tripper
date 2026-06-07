@@ -292,17 +292,28 @@ Example commands:
 
 Functional requirements:
 
-- [ ] Store generated plan versions.
-- [ ] Support localized edits to selected days.
-- [ ] Show a diff between the old and new itinerary.
-- [ ] Keep user constraints across turns.
-- [ ] Re-run verifier after every edit.
+- [x] Store generated plan versions.
+- [x] Support localized edits to selected days.
+- [x] Show a diff between the old and new itinerary.
+- [x] Keep user constraints across turns.
+- [x] Re-run verifier after every edit.
+- [ ] Add LLM-backed natural-language rewrite of detailed HTML sections.
 
 Acceptance criteria:
 
-- Users can revise a plan without regenerating everything from scratch.
-- The app shows what changed and why.
-- Verifier and cost tracing still work for edited plans.
+- [x] Users can revise a plan without regenerating everything from scratch.
+- [x] The app shows what changed and why.
+- [x] Verifier still runs for edited plans.
+- [ ] Cost tracing for edit-specific LLM calls, once LLM-backed editing is added.
+
+Current implementation note:
+
+- Phase 6 is implemented as a Java-owned deterministic editing MVP under `src/main/java/com/embabel/tripper/editing`.
+- Completed travel plans are saved into an editable session keyed by the Embabel process id.
+- `/plans/{processId}/edit` shows constraints, latest version, verifier status, day-level notes, diff, and version history.
+- Edits can target all days or a selected date. The service preserves original route/date/budget constraints and records the user's instruction as a scoped edit note.
+- Every edited version reruns the Phase 2 verifier against the updated plan/days.
+- The next improvement is to add an LLM-backed rewrite action that updates the detailed HTML plan text while keeping deterministic versioning, diff, safety, and verifier behavior.
 
 Resume value:
 

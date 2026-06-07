@@ -317,6 +317,39 @@ Current limitations:
 - Tool governance is enforced through prompts and output filtering; low-level per-tool callback blocking is a future enhancement.
 - Unsupported-claim scoring is not implemented beyond citation-aware RAG guidance and verifier checks.
 
+## Plan Editing Copilot
+
+Phase 6 adds a deterministic multi-turn editing MVP for completed travel plans.
+
+After a planning run completes, open:
+
+```text
+http://localhost:8747/plans/{processId}/edit
+```
+
+The final journey page also includes an `Edit This Plan` link when an `agentProcess` is available.
+
+Implementation path:
+
+```text
+src/main/java/com/embabel/tripper/editing
+src/main/resources/templates/plan-edit.html
+```
+
+Current behavior:
+
+- Completed `TravelPlan` results are saved as editable sessions keyed by process id.
+- Version 1 is the original generated plan.
+- Each edit creates a new version with the instruction, scoped day notes, diff, and verifier result.
+- Edits can target all days or one selected date.
+- Original route, dates, daily budget, and user brief are preserved across versions.
+
+Current limitations:
+
+- The edit MVP is deterministic and records scoped edit notes; it does not yet call an LLM to rewrite full itinerary prose.
+- Edited versions are stored in memory and reset when the app restarts.
+- Edit-specific cost tracing will become useful once LLM-backed editing is added.
+
 ## Useful Files
 
 - `README.md`: project overview and quick start.

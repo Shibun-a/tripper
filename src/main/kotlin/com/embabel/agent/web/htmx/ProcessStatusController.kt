@@ -2,6 +2,9 @@ package com.embabel.agent.web.htmx
 
 import com.embabel.agent.core.AgentPlatform
 import com.embabel.agent.core.AgentProcessStatusCode
+import com.embabel.tripper.agent.TravelPlan
+import com.embabel.tripper.editing.EditableItineraryDay
+import com.embabel.tripper.editing.PlanEditingService
 import com.embabel.tripper.observability.AgentRunStatus
 import com.embabel.tripper.observability.AgentRunTraceService
 import org.slf4j.LoggerFactory
@@ -17,6 +20,7 @@ import org.springframework.web.server.ResponseStatusException
 class ProcessStatusController(
     private val agentPlatform: AgentPlatform,
     private val agentRunTraceService: AgentRunTraceService,
+    private val planEditingService: PlanEditingService,
 ) {
 
     private val logger = LoggerFactory.getLogger(ProcessStatusController::class.java)
@@ -46,6 +50,24 @@ class ProcessStatusController(
                     agentProcess.modelsUsed().map { it.name },
                 )
                 val result = agentProcess.lastResult()
+                if (result is TravelPlan) {
+                    val session = planEditingService.createSession(
+                        processId,
+                        result.proposal.title,
+                        result.brief.from,
+                        result.brief.to,
+                        result.brief.transportPreference,
+                        result.brief.departureDate,
+                        result.brief.returnDate,
+                        result.brief.dailyBudget,
+                        result.brief.brief,
+                        result.proposal.plan,
+                        result.proposal.days.map {
+                            EditableItineraryDay(it.date, it.locationAndCountry, null)
+                        },
+                    )
+                    model.addAttribute("planEditSession", session)
+                }
                 model.addAttribute(resultModelKey, result)
                 model.addAttribute("agentProcess", agentProcess)
                 successView

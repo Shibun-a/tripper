@@ -17,6 +17,7 @@ The current goal of this fork is to evolve the baseline demo into a stronger AI 
 - Java-owned Phase 3 evaluation MVP under `src/main/java/com/embabel/tripper/eval`, with a 30-case travel dataset, deterministic regression metrics, JSON/Markdown reports, and CI-friendly unit tests.
 - Java-owned Phase 4 observability MVP under `src/main/java/com/embabel/tripper/observability`, with per-run action timelines, final usage/cost capture, cost warnings, and `/runs` trace pages.
 - Java-owned Phase 5 safety MVP under `src/main/java/com/embabel/tripper/safety`, with prompt-injection detection, untrusted RAG context wrapping, tool policy prompts, unsafe-link filtering, and trace redaction.
+- Java-owned Phase 6 editing MVP under `src/main/java/com/embabel/tripper/editing`, with plan versioning, scoped edit notes, day-level diffs, constraint preservation, and verifier reruns after edits.
 
 ## Attribution
 
