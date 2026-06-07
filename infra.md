@@ -21,7 +21,7 @@ Tripper 是一个旅行规划 Agent 应用。用户在 Web 表单中输入出发
 - OpenAI 模型调用。
 - MCP 工具调用，包括 Web、Maps、Weather、Browser Automation、Airbnb 等。
 - 结构化领域模型，约束 LLM 输出为可被程序继续处理的数据对象。
-- Java 实现的 RAG、行程校验、评测和可观测性模块，用于展示个人扩展能力。
+- Java 实现的 RAG、行程校验、评测、可观测性和安全模块，用于展示个人扩展能力。
 
 ## 2. 总体架构
 
@@ -154,7 +154,21 @@ flowchart TD
 - `src/main/resources/templates/runs.html`
 - `src/main/resources/templates/run-detail.html`
 
-### 3.8 Test Layer
+### 3.8 Safety / Guardrails Layer
+
+职责：
+
+- 将 RAG 和外部网页内容标记为不可信上下文。
+- 检测知识库 chunk 中的 prompt injection、工具滥用指令和敏感信息暴露风险。
+- 在 Agent prompt 中加入工具安全策略、允许工具组和单 action 工具调用预算。
+- 对最终 HTML 和结构化链接做 unsafe URL 过滤。
+- 对 trace 摘要执行敏感信息脱敏，避免常见 token、key、secret、email 等进入历史记录。
+
+主要文件：
+
+- `src/main/java/com/embabel/tripper/safety/**`
+
+### 3.9 Test Layer
 
 职责：
 
@@ -169,6 +183,8 @@ flowchart TD
 - `src/test/java/com/embabel/tripper/verification/ItineraryVerificationServiceTest.java`
 - `src/test/java/com/embabel/tripper/eval/TravelEvaluationHarnessTest.java`
 - `src/test/java/com/embabel/tripper/observability/AgentRunTraceServiceTest.java`
+- `src/test/java/com/embabel/tripper/safety/ContentSafetyServiceTest.java`
+- `src/test/java/com/embabel/tripper/safety/ToolSafetyServiceTest.java`
 
 ## 4. 核心运行链路
 
@@ -248,6 +264,7 @@ flowchart TD
 │       ├── eval
 │       ├── observability
 │       ├── rag
+│       ├── safety
 │       ├── verification
 │       └── web
 ├── src/main/resources
@@ -339,8 +356,8 @@ GitHub Actions CI 配置目录。
 | --- | --- |
 | `src/main/java/com/embabel/tripper/rag/TravelKnowledgeSourceType.java` | 知识来源类型枚举，包括粘贴文本、上传文件和 URL。 |
 | `src/main/java/com/embabel/tripper/rag/TravelKnowledgeDocument.java` | 用户导入的知识文档模型。 |
-| `src/main/java/com/embabel/tripper/rag/TravelKnowledgeHit.java` | 检索命中的 chunk 结果，包含分数、来源和 citation id。 |
-| `src/main/java/com/embabel/tripper/rag/TravelKnowledgeContext.java` | 可注入 Agent prompt 的知识上下文，实现 `PromptContributor`。 |
+| `src/main/java/com/embabel/tripper/rag/TravelKnowledgeHit.java` | 检索命中的 chunk 结果，包含分数、来源、citation id、安全评估和面向 prompt 的脱敏文本。 |
+| `src/main/java/com/embabel/tripper/rag/TravelKnowledgeContext.java` | 可注入 Agent prompt 的知识上下文，实现 `PromptContributor`；明确把知识源标记为不可信上下文。 |
 | `src/main/java/com/embabel/tripper/rag/IndexedTravelKnowledgeChunk.java` | 内部索引 chunk 模型，保存 chunk 文本和 term vector。 |
 | `src/main/java/com/embabel/tripper/rag/TravelKnowledgeRepository.java` | 内存知识库 repository，保存文档和 chunk。 |
 | `src/main/java/com/embabel/tripper/rag/TravelKnowledgeService.java` | Java RAG 核心服务，负责导入、HTML 转文本、切 chunk、term-vector 检索和构造知识上下文。 |
@@ -390,6 +407,19 @@ GitHub Actions CI 配置目录。
 | `src/main/java/com/embabel/tripper/observability/AgentRunTraceRepository.java` | 内存 trace repository，保存最近 run 并按配置裁剪数量。 |
 | `src/main/java/com/embabel/tripper/observability/AgentRunTraceService.java` | 可观测性核心服务，负责创建 run、记录 action start/complete/fail、补最终 usage/cost 和生成成本预警。 |
 | `src/main/java/com/embabel/tripper/observability/AgentRunTraceController.java` | `/runs` 和 `/runs/{id}` 页面 Controller。 |
+
+### 6.3.5 Java 安全和 Guardrails 文件
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/main/java/com/embabel/tripper/safety/SafetyRiskLevel.java` | 安全风险等级枚举：`NONE`、`LOW`、`MEDIUM`、`HIGH`。 |
+| `src/main/java/com/embabel/tripper/safety/SafetyFindingCategory.java` | 安全问题分类枚举，包括 prompt injection、工具滥用请求、敏感信息暴露和 unsafe link。 |
+| `src/main/java/com/embabel/tripper/safety/SafetyFinding.java` | 单条安全发现，记录类别、风险等级和说明。 |
+| `src/main/java/com/embabel/tripper/safety/SafetyAssessment.java` | 针对一段不可信内容的安全评估结果，包含最高风险等级和 findings 汇总。 |
+| `src/main/java/com/embabel/tripper/safety/SensitiveDataRedactor.java` | 敏感信息脱敏服务，覆盖常见 API key、token、secret、password、bearer token、OpenAI/GitHub token 和 email。 |
+| `src/main/java/com/embabel/tripper/safety/ContentSafetyService.java` | 内容安全核心服务，负责 prompt-injection 检测、不可信文本 prompt 化、HTML 链接过滤和 URL 安全判断。 |
+| `src/main/java/com/embabel/tripper/safety/ToolSafetyProperties.java` | 工具安全配置属性，定义单 action 工具预算和高风险工具组。 |
+| `src/main/java/com/embabel/tripper/safety/ToolSafetyService.java` | 生成 Agent prompt 中的工具安全策略，并识别需要确认的高风险工具组。 |
 
 ### 6.4 外部工具和配置文件
 
@@ -459,6 +489,8 @@ GitHub Actions CI 配置目录。
 | `src/test/java/com/embabel/tripper/verification/ItineraryVerificationServiceTest.java` | Java 行程校验测试，覆盖日期缺口、缺失地点、预算、链接、路线和住宿覆盖检查。 |
 | `src/test/java/com/embabel/tripper/eval/TravelEvaluationHarnessTest.java` | Java 评测 harness 测试，覆盖数据集规模/维度、CI 子集指标和 JSON/Markdown 报告写出。 |
 | `src/test/java/com/embabel/tripper/observability/AgentRunTraceServiceTest.java` | Java 可观测性服务测试，覆盖 action timeline、失败记录、最终 usage/cost 和成本预警。 |
+| `src/test/java/com/embabel/tripper/safety/ContentSafetyServiceTest.java` | Java 内容安全测试，覆盖 prompt injection 检测、敏感信息脱敏、HTML 链接过滤和 URL 安全判断。 |
+| `src/test/java/com/embabel/tripper/safety/ToolSafetyServiceTest.java` | Java 工具安全测试，覆盖 prompt policy 生成和高风险工具组识别。 |
 
 ### 6.11 CI 文件
 
@@ -498,6 +530,7 @@ GitHub Actions CI 配置目录。
 - 行程日期、地点、路线、预算、链接和住宿一致性校验。
 - 评测数据集加载、离线候选计划生成、指标聚合和报告写出。
 - Agent run trace 创建、action timeline 记录、usage/cost 汇总和成本预警。
+- 不可信 RAG 内容检测、prompt injection 规则识别、敏感信息脱敏、工具安全 prompt policy 和 unsafe link 过滤。
 - Spring MVC 页面路由和状态分发。
 
 ### 7.3 外部系统负责的部分
@@ -518,7 +551,7 @@ GitHub Actions CI 配置目录。
 | 行程校验器 | `src/main/java/com/embabel/tripper/verification` | Java-owned MVP：日期、预算、路线、链接、住宿一致性校验；后续可替换为 maps-backed verifier。 |
 | Agent 评测 | `src/main/java/com/embabel/tripper/eval` 和 `evals/` | Java-owned MVP：30 条数据集、离线确定性 runner、质量指标、JSON/Markdown 报告；后续接真实 Agent runner 和 LLM judge。 |
 | 可观测性 | `src/main/java/com/embabel/tripper/observability` | Java-owned MVP：action timeline、usage/cost、latency、工具组摘要、成本预警和 `/runs` trace 页面；后续接低层 tool event 和持久化。 |
-| Guardrails | `src/main/kotlin/com/embabel/tripper/safety` | prompt injection 防护、工具权限、敏感信息脱敏。 |
+| Guardrails | `src/main/java/com/embabel/tripper/safety` | Java-owned MVP：prompt injection 检测、不可信 RAG 包装、工具 policy、敏感信息脱敏、unsafe link 过滤；后续接低层 tool callback allow/block。 |
 | 多轮编辑 | `src/main/kotlin/com/embabel/tripper/editing` | plan version、diff、局部重排、repair loop。 |
 
 ## 9. 本地运行入口

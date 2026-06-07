@@ -277,6 +277,46 @@ Current limitations:
 - Tool tracking records configured tool groups per action, not every low-level tool request/response.
 - The app emits cost warnings, but automatic model downgrade is not implemented yet.
 
+## Guardrails And Tool Safety
+
+Phase 5 adds a Java-owned safety layer for prompt-injection defense, link filtering, tool-use policy, and trace redaction.
+
+Implementation path:
+
+```text
+src/main/java/com/embabel/tripper/safety
+```
+
+Default configuration:
+
+```yaml
+embabel:
+  tripper:
+    safety:
+      tools:
+        enabled: true
+        max-tool-calls-per-action: 8
+        high-risk-tool-groups:
+          - browser
+          - browser_automation
+          - airbnb
+```
+
+Current behavior:
+
+- Retrieved knowledge is treated as untrusted content in Agent prompts.
+- Prompt-injection and tool-misuse patterns are detected in RAG chunks.
+- Suspicious instruction lines are removed before knowledge content is injected into prompts.
+- Common secret, token, password, client-secret, API-key, bearer-token, GitHub-token, OpenAI-token, and email patterns are redacted from trace summaries.
+- Agent prompts include per-action allowed tool groups and tool-call budget guidance.
+- Final rendered HTML and structured output links are filtered to safe `http(s)` URLs.
+
+Current limitations:
+
+- The safety layer uses deterministic rules, not an LLM safety classifier.
+- Tool governance is enforced through prompts and output filtering; low-level per-tool callback blocking is a future enhancement.
+- Unsupported-claim scoring is not implemented beyond citation-aware RAG guidance and verifier checks.
+
 ## Useful Files
 
 - `README.md`: project overview and quick start.

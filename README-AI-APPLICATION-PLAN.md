@@ -245,18 +245,30 @@ User story:
 
 Functional requirements:
 
-- [ ] Treat external webpage content as untrusted context.
-- [ ] Add prompt-injection detection for retrieved web content.
-- [ ] Add tool permission rules and per-run tool budgets.
-- [ ] Add confirmation before high-cost or high-risk operations.
-- [ ] Add output filtering for unsafe links or unsupported claims.
-- [ ] Redact sensitive user fields from logs and traces.
+- [x] Treat external webpage and knowledge-base content as untrusted context.
+- [x] Add prompt-injection detection for retrieved web content.
+- [x] Add tool permission rules and per-action tool budgets in Agent prompts.
+- [x] Keep confirmation before high-cost remote goal execution.
+- [x] Add output filtering for unsafe links.
+- [x] Redact sensitive user fields from traces.
+- [ ] Add low-level tool callback enforcement for per-call allow/block/confirm decisions.
+- [ ] Add unsupported-claim scoring beyond citation and verifier checks.
 
 Acceptance criteria:
 
-- Webpage instructions cannot override the agent's system or developer instructions.
-- Risky tool calls require explicit permission or are blocked.
-- Logs do not expose sensitive traveler information by default.
+- [x] Webpage instructions cannot override the agent's system or developer instructions in RAG/Agent prompts.
+- [x] Risky tool groups are identified and constrained by policy prompts and existing expensive-operation confirmation.
+- [x] Trace summaries do not expose common secret, token, password, or email patterns by default.
+
+Current implementation note:
+
+- Phase 5 is implemented as a Java-owned safety MVP under `src/main/java/com/embabel/tripper/safety`.
+- `ContentSafetyService` detects prompt-injection patterns, tool-misuse requests, secret exposure patterns, and unsafe URL schemes.
+- RAG retrieval marks knowledge-source blocks as untrusted, adds safety risk summaries, and uses sanitized prompt text that removes suspicious instruction lines.
+- `ToolSafetyService` contributes per-action tool policy text to Agent prompts, including allowed tool groups and tool-call budget guidance.
+- Final HTML post-processing blocks unsafe `href`/`src` values, and structured page/image/video/stay links are filtered to safe `http(s)` URLs.
+- `AgentRunTraceService` redacts common secrets, bearer tokens, API keys, GitHub/OpenAI tokens, passwords, client secrets, and email addresses from trace summaries.
+- Low-level tool callback enforcement is intentionally left for a later enhancement because current tool execution is mediated by Embabel action internals.
 
 Resume value:
 

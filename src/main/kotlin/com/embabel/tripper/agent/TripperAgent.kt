@@ -22,6 +22,7 @@ import com.embabel.agent.api.common.SomeOf
 import com.embabel.agent.api.common.create
 import com.embabel.agent.core.CoreToolGroups
 import com.embabel.agent.core.last
+import com.embabel.agent.domain.library.InternetResource
 import com.embabel.agent.prompt.ResponseFormat
 import com.embabel.agent.prompt.element.ToolCallControl
 import com.embabel.agent.prompt.persona.Persona
@@ -33,6 +34,8 @@ import com.embabel.tripper.config.ToolsConfig
 import com.embabel.tripper.observability.AgentRunTraceService
 import com.embabel.tripper.rag.TravelKnowledgeContext
 import com.embabel.tripper.rag.TravelKnowledgeService
+import com.embabel.tripper.safety.ContentSafetyService
+import com.embabel.tripper.safety.ToolSafetyService
 import com.embabel.tripper.util.ImageChecker
 import com.embabel.tripper.verification.ItineraryDay
 import com.embabel.tripper.verification.ItineraryLink
@@ -68,6 +71,8 @@ class TripperAgent(
     private val travelKnowledgeService: TravelKnowledgeService,
     private val itineraryVerificationService: ItineraryVerificationService,
     private val agentRunTraceService: AgentRunTraceService,
+    private val contentSafetyService: ContentSafetyService,
+    private val toolSafetyService: ToolSafetyService,
 ) {
 
     private val logger = LoggerFactory.getLogger(TripperAgent::class.java)
@@ -137,7 +142,10 @@ class TripperAgent(
         knowledgeContext: TravelKnowledgeContext,
         context: OperationContext,
     ): ItineraryIdeas {
+        val toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH, WEATHER_TOOLS)
         val prompt = """
+                ${toolSafetyService.promptPolicy("findPointsOfInterest", toolNames)}
+
                 Consider the following travel brief for a journey from ${travelBrief.from} to ${travelBrief.to}.
                 ${travelBrief.contribution()}
                 Find points of interest that are relevant to the travel brief and travelers.
@@ -154,7 +162,7 @@ class TripperAgent(
             inputSummary = "route=${travelBrief.from}->${travelBrief.to}, knowledgeHits=${knowledgeContext.hits.size}",
             modelName = modelName(config.thinkerLlm),
             promptCharacters = prompt.length,
-            toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH, WEATHER_TOOLS),
+            toolNames = toolNames,
             outputSummary = { "pointsOfInterest=${it.pointsOfInterest.size}" },
             completionCharacters = { it.pointsOfInterest.sumOf { poi -> poi.name.length + poi.description.length } },
         ) {
@@ -184,6 +192,7 @@ class TripperAgent(
         confirmation: AcceptanceOfCost,
         context: OperationContext,
     ): PointOfInterestFindings {
+        val toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.BROWSER_AUTOMATION, WEATHER_TOOLS, "braveImageSearch")
         val estimatedPromptCharacters = itineraryIdeas.pointsOfInterest.sumOf {
             520 + travelBrief.brief.length + it.name.length + it.description.length +
                     it.location.length + knowledgeContext.contribution().length
@@ -194,7 +203,7 @@ class TripperAgent(
             inputSummary = "pointsOfInterest=${itineraryIdeas.pointsOfInterest.size}, maxConcurrency=${config.maxConcurrency}",
             modelName = "researcher",
             promptCharacters = estimatedPromptCharacters,
-            toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.BROWSER_AUTOMATION, WEATHER_TOOLS, "braveImageSearch"),
+            toolNames = toolNames,
             outputSummary = { "researched=${it.pointsOfInterest.size}" },
             completionCharacters = { it.pointsOfInterest.sumOf { finding -> finding.research.length } },
         ) {
@@ -217,6 +226,8 @@ class TripperAgent(
             ) { poi ->
                 val rpi = promptRunner.create<ResearchedPointOfInterest>(
                     prompt = """
+                ${toolSafetyService.promptPolicy("researchPointsOfInterest", toolNames)}
+
                 Research the following point of interest.
                 Consider interesting stories about art and culture and famous people.
                 Your audience: ${travelBrief.brief}
@@ -255,7 +266,10 @@ class TripperAgent(
         poiFindings: PointOfInterestFindings,
         context: OperationContext,
     ): ProposedTravelPlan {
+        val toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
         val prompt = """
+                ${toolSafetyService.promptPolicy("proposeTravelPlan", toolNames)}
+
                 Given the following travel brief, create a detailed plan.
                 Give it a brief, catchy title that doesn't include dates,
                 but may consider season, mood or relate to travelers's interests.
@@ -314,7 +328,7 @@ class TripperAgent(
             inputSummary = "poiFindings=${poiFindings.pointsOfInterest.size}, knowledgeHits=${knowledgeContext.hits.size}",
             modelName = "planner",
             promptCharacters = prompt.length,
-            toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH),
+            toolNames = toolNames,
             outputSummary = { "title=${it.title}, days=${it.days.size}, links=${it.pageLinks.size + it.imageLinks.size + it.videoLinks.size}" },
             completionCharacters = { it.plan.length },
         ) {
@@ -338,13 +352,14 @@ class TripperAgent(
         proposedPlan: ProposedTravelPlan,
         context: OperationContext,
     ): VerifiedTravelPlanProposal {
+        val toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
         return tracedAction(
             context = context,
             actionName = "verifyAndRepairTravelPlan",
             inputSummary = "days=${proposedPlan.days.size}, links=${proposedPlan.pageLinks.size + proposedPlan.imageLinks.size + proposedPlan.videoLinks.size}",
             modelName = "planner",
             promptCharacters = proposedPlan.plan.length,
-            toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH),
+            toolNames = toolNames,
             outputSummary = { "status=${it.verificationResult.status}, repaired=${it.isRepaired()}, errors=${it.verificationResult.errorCount}" },
             completionCharacters = { it.proposal.plan.length },
         ) {
@@ -365,6 +380,8 @@ class TripperAgent(
             )
 
             val repairPrompt = """
+                ${toolSafetyService.promptPolicy("verifyAndRepairTravelPlan", toolNames)}
+
                 The itinerary verifier found blocking issues in the proposed travel plan.
                 Repair the plan before it is shown to the user.
 
@@ -446,6 +463,7 @@ class TripperAgent(
         val estimatedPromptCharacters = stays.sumOf { stay ->
             360 + stay.stayingAt().length + stay.days.size * 12
         }
+        val toolNames = listOf(ToolsConfig.AIRBNB, CoreToolGroups.MATH)
 
         return tracedAction(
             context = context,
@@ -453,7 +471,7 @@ class TripperAgent(
             inputSummary = "stays=${stays.size}, dailyAccommodationBudget=$dailyAccommodationBudget",
             modelName = "researcher",
             promptCharacters = estimatedPromptCharacters,
-            toolNames = listOf(ToolsConfig.AIRBNB, CoreToolGroups.MATH),
+            toolNames = toolNames,
             outputSummary = { "stays=${it.stays.size}, verification=${it.verificationResult.status}" },
             completionCharacters = { it.stays.sumOf { stay -> stay.airbnbUrl?.length ?: 0 } },
         ) {
@@ -465,6 +483,8 @@ class TripperAgent(
                 val airbnbResults = stayFinderPromptRunner
                     .create<AirbnbResultsLlmReturn>(
                         prompt = """
+                ${toolSafetyService.promptPolicy("findPlacesToSleep", toolNames)}
+
                 Find the Airbnb search URL for the following stay using the available tools.
                 Staying at location: ${stay.stayingAt()}
                 Dates: ${stay.days.joinToString { it.date.toString() }}
@@ -525,10 +545,17 @@ class TripperAgent(
                     plan = StringTransformer.transform(
                         oldPlan, listOf(
                             styleImages,
+                            removeUnsafeLinks,
                             ImageChecker.removeInvalidImageLinks,
                         )
                     ),
+                    pageLinks = safeResources(plan.proposal.pageLinks),
+                    imageLinks = safeResources(plan.proposal.imageLinks),
+                    videoLinks = safeResources(plan.proposal.videoLinks),
                 ),
+                stays = plan.stays.map { stay ->
+                    stay.copy(airbnbUrl = contentSafetyService.safeUrlOrNull(stay.airbnbUrl))
+                },
             )
         }
     }
@@ -539,6 +566,15 @@ class TripperAgent(
             "<img class=\"styled-image-thick\""
         )
     }
+
+    private val removeUnsafeLinks = StringTransformer { html ->
+        contentSafetyService.sanitizeHtmlLinks(html)
+    }
+
+    private fun safeResources(resources: List<InternetResource>): List<InternetResource> =
+        resources
+            .filter { contentSafetyService.isSafeHttpUrl(it.url) }
+            .map { InternetResource(it.url, it.summary) }
 
     private fun <T> tracedAction(
         context: OperationContext,

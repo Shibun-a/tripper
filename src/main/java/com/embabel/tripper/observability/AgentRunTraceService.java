@@ -1,5 +1,6 @@
 package com.embabel.tripper.observability;
 
+import com.embabel.tripper.safety.SensitiveDataRedactor;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -11,13 +12,16 @@ public class AgentRunTraceService {
 
     private final AgentRunTraceRepository repository;
     private final AgentRunObservabilityProperties properties;
+    private final SensitiveDataRedactor redactor;
 
     public AgentRunTraceService(
             AgentRunTraceRepository repository,
-            AgentRunObservabilityProperties properties
+            AgentRunObservabilityProperties properties,
+            SensitiveDataRedactor redactor
     ) {
         this.repository = repository;
         this.properties = properties;
+        this.redactor = redactor;
     }
 
     public AgentRunTrace createRun(
@@ -156,7 +160,7 @@ public class AgentRunTraceService {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String normalized = value.replaceAll("\\s+", " ").trim();
+        String normalized = redactor.redact(value).replaceAll("\\s+", " ").trim();
         if (properties.isCapturePromptContent()) {
             return clip(normalized);
         }

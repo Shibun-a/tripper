@@ -1,5 +1,6 @@
 package com.embabel.tripper.observability;
 
+import com.embabel.tripper.safety.SensitiveDataRedactor;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -72,7 +73,14 @@ class AgentRunTraceServiceTest {
     @Test
     void storesSummariesInsteadOfPromptBodiesByDefault() {
         AgentRunTraceService service = service(1.0);
-        service.createRun("run-3", "Tokyo to Kyoto", "Tokyo", "Kyoto", 220.0, "briefCharacters=1200");
+        service.createRun(
+                "run-3",
+                "Tokyo to Kyoto",
+                "Tokyo",
+                "Kyoto",
+                220.0,
+                "briefCharacters=1200 email=user@example.com token=abc123"
+        );
 
         String eventId = service.startAction(
                 "run-3",
@@ -86,7 +94,7 @@ class AgentRunTraceServiceTest {
 
         AgentRunTrace trace = service.findTrace("run-3").orElseThrow();
 
-        assertEquals("briefCharacters=1200", trace.getInputSummary());
+        assertEquals("briefCharacters=1200 email=[REDACTED_EMAIL] token=[REDACTED]", trace.getInputSummary());
         assertEquals("promptCharacters=1200, travelers=2", trace.getEvents().getFirst().getInputSummary());
         assertFalse(trace.getEvents().getFirst().getInputSummary().contains("Find the best hidden restaurants"));
     }
@@ -94,6 +102,6 @@ class AgentRunTraceServiceTest {
     private AgentRunTraceService service(double warningThreshold) {
         AgentRunObservabilityProperties properties = new AgentRunObservabilityProperties();
         properties.setCostWarningThresholdUsd(warningThreshold);
-        return new AgentRunTraceService(new AgentRunTraceRepository(), properties);
+        return new AgentRunTraceService(new AgentRunTraceRepository(), properties, new SensitiveDataRedactor());
     }
 }

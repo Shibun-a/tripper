@@ -1,5 +1,7 @@
 package com.embabel.tripper.rag;
 
+import com.embabel.tripper.safety.ContentSafetyService;
+import com.embabel.tripper.safety.SafetyAssessment;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
@@ -25,13 +27,16 @@ public class TravelKnowledgeService {
 
     private final TravelKnowledgeRepository repository;
     private final RestClient restClient;
+    private final ContentSafetyService contentSafetyService;
 
     public TravelKnowledgeService(
             TravelKnowledgeRepository repository,
-            RestClient restClient
+            RestClient restClient,
+            ContentSafetyService contentSafetyService
     ) {
         this.repository = repository;
         this.restClient = restClient;
+        this.contentSafetyService = contentSafetyService;
     }
 
     public TravelKnowledgeDocument addPastedText(
@@ -126,6 +131,10 @@ public class TravelKnowledgeService {
         Set<String> matched = new HashSet<>(queryVector.keySet());
         matched.retainAll(chunk.getTermVector().keySet());
         List<String> matchedTerms = matched.stream().sorted().toList();
+        SafetyAssessment safetyAssessment = contentSafetyService.assessUntrustedContent(
+                chunk.getSource(),
+                chunk.getText()
+        );
 
         return new TravelKnowledgeHit(
                 chunk.getDocumentId(),
@@ -135,8 +144,10 @@ public class TravelKnowledgeService {
                 chunk.getChunkId(),
                 chunk.getChunkIndex(),
                 chunk.getText(),
+                contentSafetyService.sanitizeUntrustedTextForPrompt(chunk.getText(), safetyAssessment),
                 score,
-                matchedTerms
+                matchedTerms,
+                safetyAssessment
         );
     }
 

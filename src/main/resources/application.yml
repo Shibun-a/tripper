@@ -53,6 +53,14 @@ embabel:
       max-summary-characters: 240
       max-runs: 100
       cost-warning-threshold-usd: 0.15
+    safety:
+      tools:
+        enabled: true
+        max-tool-calls-per-action: 8
+        high-risk-tool-groups:
+          - browser
+          - browser_automation
+          - airbnb
 
     # Anthropic models will give better results but are more expensive
     thinker-llm:

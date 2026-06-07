@@ -1,5 +1,7 @@
 package com.embabel.tripper.rag;
 
+import com.embabel.tripper.safety.SafetyAssessment;
+
 import java.util.List;
 
 public final class TravelKnowledgeHit {
@@ -11,8 +13,10 @@ public final class TravelKnowledgeHit {
     private final String chunkId;
     private final int chunkIndex;
     private final String text;
+    private final String promptText;
     private final double score;
     private final List<String> matchedTerms;
+    private final SafetyAssessment safetyAssessment;
 
     public TravelKnowledgeHit(
             String documentId,
@@ -22,8 +26,10 @@ public final class TravelKnowledgeHit {
             String chunkId,
             int chunkIndex,
             String text,
+            String promptText,
             double score,
-            List<String> matchedTerms
+            List<String> matchedTerms,
+            SafetyAssessment safetyAssessment
     ) {
         this.documentId = documentId;
         this.documentTitle = documentTitle;
@@ -32,8 +38,10 @@ public final class TravelKnowledgeHit {
         this.chunkId = chunkId;
         this.chunkIndex = chunkIndex;
         this.text = text;
+        this.promptText = promptText;
         this.score = score;
         this.matchedTerms = List.copyOf(matchedTerms);
+        this.safetyAssessment = safetyAssessment == null ? SafetyAssessment.safe(source) : safetyAssessment;
     }
 
     public String getDocumentId() {
@@ -64,6 +72,10 @@ public final class TravelKnowledgeHit {
         return text;
     }
 
+    public String getPromptText() {
+        return promptText;
+    }
+
     public double getScore() {
         return score;
     }
@@ -78,5 +90,13 @@ public final class TravelKnowledgeHit {
 
     public String getMatchedTermsText() {
         return String.join(", ", matchedTerms);
+    }
+
+    public SafetyAssessment getSafetyAssessment() {
+        return safetyAssessment;
+    }
+
+    public boolean isHasSafetyFindings() {
+        return safetyAssessment.isHasFindings();
     }
 }
