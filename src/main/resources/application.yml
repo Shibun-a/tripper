@@ -48,6 +48,25 @@ embabel:
             provider: Docker
             tools:
               - weather
+          # Map the flat tools from the Docker MCP gateway to the CoreToolGroups roles the
+          # agent calls (CoreToolGroups.WEB = "web", CoreToolGroups.MAPS = "maps"), so
+          # withTools(WEB/MAPS) resolves to real gateway tools instead of an empty group.
+          web:
+            description: Search the web with Brave
+            provider: Docker
+            tools:
+              - brave_web_search
+          maps:
+            description: Google Maps geocoding, places, directions and distances
+            provider: Docker
+            tools:
+              - maps_geocode
+              - maps_reverse_geocode
+              - maps_search_places
+              - maps_place_details
+              - maps_distance_matrix
+              - maps_elevation
+              - maps_directions
 
   tripper:
     word-count: 600
