@@ -20,8 +20,9 @@ embabel-agent-api/src/main/resources/mcp/**
 .env.local
 .env
 
-# 本地问题记录,不同步
+# 本地文档,不同步到 GitHub
 项目问题记录.md
+agent-flow.md
 
 # Log file
 *.log
