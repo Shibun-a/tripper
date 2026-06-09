@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import org.springframework.web.client.RestClient
+import org.springframework.web.util.UriComponentsBuilder
 import java.time.Instant
 
 data class WebSearchRequest(
@@ -26,16 +27,22 @@ abstract class BraveSearchService(
     private val restClient: RestClient,
 ) {
 
+    /**
+     * Build the absolute request URI. baseUrl is a full https URL, so it must be parsed with
+     * fromUriString rather than passed to uriBuilder.path() (which collapses "https://" to
+     * "https:/" and produces an "unsupported URI").
+     */
+    private fun requestUri(request: WebSearchRequest) =
+        UriComponentsBuilder.fromUriString(baseUrl)
+            .queryParam("q", request.query)
+            .queryParam("count", request.count)
+            .queryParam("offset", request.offset)
+            .build()
+            .toUri()
+
     fun search(request: WebSearchRequest): BraveSearchResults {
         val rawResponse = restClient.get()
-            .uri { uriBuilder ->
-                uriBuilder
-                    .path(baseUrl)
-                    .queryParam("q", request.query)
-                    .queryParam("count", request.count)
-                    .queryParam("offset", request.offset)
-                    .build()
-            }
+            .uri(requestUri(request))
             .header("X-Subscription-Token", apiKey)
             .header("Accept", "application/json")
             .retrieve()
@@ -47,14 +54,7 @@ abstract class BraveSearchService(
 
     fun searchRaw(request: WebSearchRequest): String {
         return restClient.get()
-            .uri { uriBuilder ->
-                uriBuilder
-                    .path(baseUrl)
-                    .queryParam("q", request.query)
-                    .queryParam("count", request.count)
-                    .queryParam("offset", request.offset)
-                    .build()
-            }
+            .uri(requestUri(request))
             .header("X-Subscription-Token", apiKey)
             .header("Accept", "application/json")
             .retrieve()
