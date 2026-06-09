@@ -41,6 +41,14 @@ embabel:
   # Add additional MCP tools
   agent:
     platform:
+      # Fail fast on flaky/cross-border connections to the model API. The defaults are 10 + 10
+      # (nested), which turned a single dropped connection (EOF) into a ~34-minute retry hang.
+      llm-operations:
+        data-binding:
+          max-attempts: 3
+      models:
+        anthropic:
+          max-attempts: 3
       tools:
         includes:
           weather:
