@@ -22,9 +22,9 @@ abstract class BraveSearchService(
     val name: String,
     val description: String,
     @field:Value("\${BRAVE_API_KEY}")
-    private val apiKey: String,
+    protected val apiKey: String,
     private val baseUrl: String,
-    private val restClient: RestClient,
+    protected val restClient: RestClient,
 ) {
 
     /**
@@ -32,7 +32,7 @@ abstract class BraveSearchService(
      * fromUriString rather than passed to uriBuilder.path() (which collapses "https://" to
      * "https:/" and produces an "unsupported URI").
      */
-    private fun requestUri(request: WebSearchRequest) =
+    protected fun requestUri(request: WebSearchRequest) =
         UriComponentsBuilder.fromUriString(baseUrl)
             .queryParam("q", request.query)
             .queryParam("count", request.count)
@@ -103,12 +103,42 @@ class BraveImageSearchService(
     restClient = restClient,
 ) {
 
-    @Tool(description = "Brave image search")
+    @Tool(description = "Brave image search. Returns up to 3 direct image URLs, each with a caption.")
     fun searchImages(request: WebSearchRequest): String {
-        val raw = searchRaw(request)
-        return raw
+        // Cap at 3 results and return only the direct image URL + caption instead of the full
+        // raw JSON. Feeding the entire Brave payload back into the LLM context was the main
+        // driver of runaway token cost during point-of-interest research.
+        val response = restClient.get()
+            .uri(requestUri(request.copy(count = 3)))
+            .header("X-Subscription-Token", apiKey)
+            .header("Accept", "application/json")
+            .retrieve()
+            .body(BraveImageSearchResponse::class.java)
+        val images = response?.results.orEmpty()
+            .mapNotNull { result ->
+                val url = result.properties?.url ?: result.thumbnail?.src
+                if (url.isNullOrBlank()) null
+                else if (result.title.isNullOrBlank()) url else "$url | ${result.title}"
+            }
+            .take(3)
+        return if (images.isEmpty()) "No images found" else images.joinToString("\n")
     }
 }
+
+internal data class BraveImageSearchResponse(
+    val results: List<BraveImageResult> = emptyList(),
+)
+
+internal data class BraveImageResult(
+    val title: String? = null,
+    val url: String? = null,
+    val thumbnail: BraveImageThumbnail? = null,
+    val properties: BraveImageProperties? = null,
+)
+
+internal data class BraveImageThumbnail(val src: String? = null)
+
+internal data class BraveImageProperties(val url: String? = null)
 
 @ConditionalOnProperty("BRAVE_API_KEY")
 @Service
