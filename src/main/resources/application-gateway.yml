@@ -1,0 +1,18 @@
+# Local-run profile: connect the locally launched app to the already-running
+# Docker MCP gateway (docker compose up mcp-gateway) over SSE, instead of
+# Docker Desktop's built-in MCP toolkit. Run with:
+#   SPRING_PROFILES_ACTIVE=gateway ./mvnw -Dmaven.test.skip=true spring-boot:run
+# Requires the gateway to be up on localhost:9011 (docker compose up mcp-gateway zipkin).
+spring:
+  ai:
+    mcp:
+      client:
+        enabled: true
+        name: embabel
+        version: 1.0.0
+        request-timeout: 30s
+        type: SYNC
+        sse:
+          connections:
+            docker-gateway:
+              url: http://localhost:9011

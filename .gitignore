@@ -17,6 +17,11 @@ embabel-agent-api/src/main/resources/mcp/**
 *.class
 
 .mcp.env
+.env.local
+.env
+
+# 本地问题记录,不同步
+项目问题记录.md
 
 # Log file
 *.log

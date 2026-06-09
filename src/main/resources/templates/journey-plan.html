@@ -13,25 +13,24 @@
 
         <div style="margin-bottom: 20px;">
             <a href="/travel/journey" target="_blank" rel="noopener noreferrer"
-               class="submit-btn">
+               class="submit-btn" th:text="#{result.planAnother}">
                 Plan Another Journey
             </a>
             <a th:if="${agentProcess != null}" th:href="@{/runs/{id}(id=${agentProcess.id})}"
-               class="submit-btn" style="margin-left: 0.5rem;">
+               class="submit-btn" style="margin-left: 0.5rem;" th:text="#{result.inspectTrace}">
                 Inspect Run Trace
             </a>
             <a th:if="${agentProcess != null}" th:href="@{/plans/{id}/edit(id=${agentProcess.id})}"
-               class="submit-btn" style="margin-left: 0.5rem;">
+               class="submit-btn" style="margin-left: 0.5rem;" th:text="#{result.editPlan}">
                 Edit This Plan
             </a>
         </div>
 
 
         <div th:if="${travelPlan.brief != null}">
-            <h3>Brief</h3>
-            <p style="margin-bottom: 0.75rem;">From [[${travelPlan.brief.from}]] to [[${travelPlan.brief.to}]]
-                from [[${#temporals.format(travelPlan.brief.departureDate, 'dd MMM yyyy')}]] to
-                [[${#temporals.format(travelPlan.brief.returnDate, 'dd MMM yyyy')}]]</p>
+            <h3 th:text="#{result.brief}">Brief</h3>
+            <p style="margin-bottom: 0.75rem;"
+               th:text="#{result.briefRoute(${travelPlan.brief.from}, ${travelPlan.brief.to}, ${#temporals.format(travelPlan.brief.departureDate, 'dd MMM yyyy')}, ${#temporals.format(travelPlan.brief.returnDate, 'dd MMM yyyy')})}">From A to B from C to D</p>
             <i style="margin-bottom: 1rem; display:block;">[[${travelPlan.brief.brief}]]</i>
 
             <ul class="travelers-list">
@@ -41,10 +40,10 @@
                 </li>
             </ul>
 
-            <h3>Plan</h3>
+            <h3 th:text="#{result.plan}">Plan</h3>
             <div style="margin-bottom: 20px;">
                 <a th:href="${travelPlan.journeyMapUrl}" target="_blank" rel="noopener noreferrer"
-                   class="submit-btn">
+                   class="submit-btn" th:text="#{result.interactiveMap}">
                     Interactive Map
                 </a>
             </div>
@@ -52,12 +51,12 @@
             <div th:utext="${travelPlan.proposal.plan}" style="margin-bottom: 1rem;"></div>
 
             <div th:if="${travelPlan.verificationResult != null}" style="margin-bottom: 1.5rem;">
-                <h3>Verification</h3>
+                <h3 th:text="#{result.verification}">Verification</h3>
                 <p style="margin-bottom: 0.5rem;">
-                    <strong>Status:</strong>
+                    <strong th:text="#{result.status}">Status:</strong>
                     <span th:text="${travelPlan.verificationResult.status}"></span>
                     <span th:if="${travelPlan.verificationResult.repaired}"
-                          style="margin-left: 0.75rem;">Repaired before final display</span>
+                          style="margin-left: 0.75rem;" th:text="#{result.repaired}">Repaired before final display</span>
                 </p>
                 <p th:text="${travelPlan.verificationResult.summary}" style="margin-bottom: 0.75rem;"></p>
 
@@ -74,7 +73,7 @@
                 </ul>
 
                 <div th:if="${travelPlan.verificationResult.routeEstimates != null && !#lists.isEmpty(travelPlan.verificationResult.routeEstimates)}">
-                    <h4>Route Estimates</h4>
+                    <h4 th:text="#{result.routeEstimates}">Route Estimates</h4>
                     <ul style="margin-bottom: 1rem;">
                         <li th:each="leg : ${travelPlan.verificationResult.routeEstimates}"
                             style="margin-bottom: 0.35rem;">
@@ -89,7 +88,7 @@
             </div>
 
             <div th:if="${travelPlan.knowledgeContext != null && travelPlan.knowledgeContext.hasHits}">
-                <h3>Knowledge Sources Used</h3>
+                <h3 th:text="#{result.knowledgeSources}">Knowledge Sources Used</h3>
                 <ol>
                     <li th:each="hit : ${travelPlan.knowledgeContext.hits}" style="margin-bottom: 0.5rem;">
                         <strong th:text="${hit.citationId}"></strong>
@@ -100,16 +99,16 @@
                 </ol>
             </div>
 
-            <h3>Stays</h3>
+            <h3 th:text="#{result.stays}">Stays</h3>
             <ul style="margin-bottom: 1rem;">
                 <li th:each="stay : ${travelPlan.stays}" style="margin-bottom: 0.5rem;">
                     <a th:href="${stay.airbnbUrl}" target="_blank" rel="noopener noreferrer"><span
-                            th:text="${stay.stayingAt() + ' on Airbnb for ' + stay.days.size() + ' nights'}"></span></a>
+                            th:text="#{result.stayOnAirbnb(${stay.stayingAt()}, ${stay.days.size()})}"></span></a>
                 </li>
             </ul>
 
             <div th:if="${travelPlan.proposal.pageLinks != null && !#lists.isEmpty(travelPlan.proposal.pageLinks)}">
-                <h3>Useful Links</h3>
+                <h3 th:text="#{result.usefulLinks}">Useful Links</h3>
                 <ul style="margin-bottom: 1rem;">
                     <li th:each="page : ${travelPlan.proposal.pageLinks}" style="margin-bottom: 0.5rem;">
                         <a th:href="${page.url}" target="_blank" rel="noopener noreferrer"><span
@@ -118,7 +117,7 @@
                 </ul>
             </div>
             <div th:if="${travelPlan.proposal.videoLinks != null && !#lists.isEmpty(travelPlan.proposal.videoLinks)}">
-                <h3>Videos</h3>
+                <h3 th:text="#{result.videos}">Videos</h3>
                 <ul style="margin-bottom: 1rem;">
                     <li th:each="page : ${travelPlan.proposal.videoLinks}" style="margin-bottom: 0.5rem;">
                         <a th:href="${page.url}" target="_blank" rel="noopener noreferrer"><span

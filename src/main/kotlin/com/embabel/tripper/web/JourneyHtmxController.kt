@@ -24,6 +24,7 @@ import com.embabel.tripper.agent.JourneyTravelBrief
 import com.embabel.tripper.agent.Traveler
 import com.embabel.tripper.agent.Travelers
 import com.embabel.tripper.observability.AgentRunTraceService
+import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
@@ -76,6 +77,8 @@ class JourneyHtmxController(
         @ModelAttribute form: JourneyPlanForm,
         model: Model
     ): String {
+        // Write the generated plan in the language the user selected in the UI.
+        val language = if (LocaleContextHolder.getLocale().language == "zh") "Chinese (Simplified)" else "English"
         val travelBrief = JourneyTravelBrief(
             from = form.from,
             to = form.to,
@@ -84,6 +87,7 @@ class JourneyHtmxController(
             departureDate = form.departureDate,
             returnDate = form.returnDate,
             dailyBudget = form.dailyBudget,
+            language = language,
         )
 
         // Convert form travelers to domain objects

@@ -42,6 +42,8 @@ data class JourneyTravelBrief(
     override val departureDate: LocalDate,
     override val returnDate: LocalDate,
     override val dailyBudget: Double = 200.0,
+    @param:JsonPropertyDescription("Language to write the plan's natural-language content in, e.g. 'English' or 'Chinese (Simplified)'")
+    val language: String = "English",
 ) : TravelBrief {
 
     override fun contribution(): String =

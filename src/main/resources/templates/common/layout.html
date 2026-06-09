@@ -14,10 +14,24 @@
 <body>
 
 <div class="container">
-    <div th:insert="~{common/fragments/user :: userAuth}" style="float: right;"></div>
+    <div style="overflow: hidden;">
+        <div th:insert="~{common/fragments/user :: userAuth}" style="float: right;"></div>
+        <div class="lang-switch" style="float: right; margin-right: 1rem; font-size: 0.85rem; line-height: 2;">
+            <a href="javascript:void(0)" onclick="setLang('zh_CN')" th:text="#{lang.switch.zh}">中文</a>
+            <span>|</span>
+            <a href="javascript:void(0)" onclick="setLang('en')" th:text="#{lang.switch.en}">English</a>
+        </div>
+    </div>
 
     <th:block th:replace="${content}"></th:block>
 </div>
+<script>
+    function setLang(lang) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('lang', lang);
+        window.location.href = url.toString();
+    }
+</script>
 <div th:replace="~{common/fragments/footer :: footer}"></div>
 </body>
 </html>

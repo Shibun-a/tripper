@@ -146,6 +146,8 @@ class TripperAgent(
         val prompt = """
                 ${toolSafetyService.promptPolicy("findPointsOfInterest", toolNames)}
 
+                ${languageInstruction(travelBrief)}
+
                 Consider the following travel brief for a journey from ${travelBrief.from} to ${travelBrief.to}.
                 ${travelBrief.contribution()}
                 Find points of interest that are relevant to the travel brief and travelers.
@@ -228,6 +230,8 @@ class TripperAgent(
                     prompt = """
                 ${toolSafetyService.promptPolicy("researchPointsOfInterest", toolNames)}
 
+                ${languageInstruction(travelBrief)}
+
                 Research the following point of interest.
                 Consider interesting stories about art and culture and famous people.
                 Your audience: ${travelBrief.brief}
@@ -269,6 +273,8 @@ class TripperAgent(
         val toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
         val prompt = """
                 ${toolSafetyService.promptPolicy("proposeTravelPlan", toolNames)}
+
+                ${languageInstruction(travelBrief)}
 
                 Given the following travel brief, create a detailed plan.
                 Give it a brief, catchy title that doesn't include dates,
@@ -382,6 +388,8 @@ class TripperAgent(
             val repairPrompt = """
                 ${toolSafetyService.promptPolicy("verifyAndRepairTravelPlan", toolNames)}
 
+                ${languageInstruction(travelBrief)}
+
                 The itinerary verifier found blocking issues in the proposed travel plan.
                 Repair the plan before it is shown to the user.
 
@@ -475,26 +483,19 @@ class TripperAgent(
             outputSummary = { "stays=${it.stays.size}, verification=${it.verificationResult.status}" },
             completionCharacters = { it.stays.sumOf { stay -> stay.airbnbUrl?.length ?: 0 } },
         ) {
-            val stayFinderPromptRunner = config.researcher.promptRunner(context)
-                .withPromptContributor(travelers)
-                .withTools(ToolsConfig.AIRBNB, CoreToolGroups.MATH)
-            val foundStays = context.parallelMap(stays, maxConcurrency = config.maxConcurrency) { stay ->
-                logger.info("Finding Airbnb options for stay at: {}", stay.locationAndCountry())
-                val airbnbResults = stayFinderPromptRunner
-                    .create<AirbnbResultsLlmReturn>(
-                        prompt = """
-                ${toolSafetyService.promptPolicy("findPlacesToSleep", toolNames)}
-
-                Find the Airbnb search URL for the following stay using the available tools.
-                Staying at location: ${stay.stayingAt()}
-                Dates: ${stay.days.joinToString { it.date.toString() }}
-                You MUST set the 'ignoreRobotsText' parameter value to true for all calls to the airbnb API
-                Try to stay under the following daily budget (USD): $dailyAccommodationBudget
-                If no suitable options are found under that, return the cheapest available options.
-            """.trimIndent(),
-                    )
+            // Build Airbnb search URLs deterministically in code (like journeyMapUrl) instead of via
+            // an MCP tool, so the plan still completes when the airbnb tool group is unavailable.
+            val foundStays = stays.map { stay ->
+                logger.info("Building Airbnb search URL for stay at: {}", stay.locationAndCountry())
+                val encodedLocation = java.net.URLEncoder.encode(stay.stayingAt(), Charsets.UTF_8.name())
+                val checkIn = stay.days.minOf { it.date }
+                val checkOut = stay.days.maxOf { it.date }.plusDays(1)
+                val priceMax = dailyAccommodationBudget.toInt()
+                val adults = travelers.travelers.size.coerceAtLeast(1)
+                val airbnbUrl = "https://www.airbnb.com/s/$encodedLocation/homes" +
+                    "?checkin=$checkIn&checkout=$checkOut&price_max=$priceMax&adults=$adults"
                 stay.copy(
-                    airbnbUrl = airbnbResults.searchUrl,
+                    airbnbUrl = airbnbUrl,
                 )
             }
 
@@ -613,6 +614,18 @@ class TripperAgent(
             throw ex
         }
     }
+
+    /**
+     * Instruction so the LLM writes natural-language content in the user's chosen UI language,
+     * while keeping machine-consumed fields (locationAndCountry, place names, URLs) in Latin form
+     * so the verifier coordinate catalog, Airbnb URLs and Google Maps links keep working.
+     */
+    private fun languageInstruction(brief: JourneyTravelBrief): String =
+        """
+        Write all natural-language content (titles, headings, descriptions and prose) in ${brief.language}.
+        IMPORTANT: keep place names and the "locationAndCountry" field in Google Maps friendly Latin form
+        (for example Barcelona,+Spain); do NOT translate location values, URLs or citation ids.
+        """.trimIndent()
 
     private fun modelName(options: LlmOptions): String? =
         options.model ?: options.role ?: options.criteria.toString()
