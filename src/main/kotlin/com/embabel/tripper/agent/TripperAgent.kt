@@ -60,8 +60,8 @@ data class TripperConfig(
     // Points of interest scale with trip length (pointsOfInterestPerDay * days), since research
     // fans out one parallel LLM call per POI. maxPointsOfInterest is a hard ceiling so very long
     // trips cannot blow up cost. Tune both via embabel.tripper.* .
-    val pointsOfInterestPerDay: Int = 5,
-    val maxPointsOfInterest: Int = 20,
+    val pointsOfInterestPerDay: Int = 3,
+    val maxPointsOfInterest: Int = 12,
 )
 
 private const val WEATHER_TOOLS = "weather"
@@ -284,7 +284,10 @@ class TripperAgent(
         poiFindings: PointOfInterestFindings,
         context: OperationContext,
     ): ProposedTravelPlan {
-        val toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
+        // MAPS is intentionally excluded here: the planner only needs to write prose, and the
+        // maps tools return very large turn-by-turn JSON that bloats this prompt (and made it
+        // prone to dropped/EOF connections). The journey map link is computed in code instead.
+        val toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MATH)
         val prompt = """
                 ${toolSafetyService.promptPolicy("proposeTravelPlan", toolNames)}
 
@@ -300,7 +303,7 @@ class TripperAgent(
                 Include total distances.
 
                 <brief>${travelBrief.contribution()}</brief>
-                Consider the weather in your recommendations. Use mapping tools to consider distance of driving or walking.
+                Consider the weather in your recommendations.
 
                 User-provided travel knowledge:
                 ${knowledgeContext.contribution()}
@@ -353,7 +356,7 @@ class TripperAgent(
             completionCharacters = { it.plan.length },
         ) {
             config.planner.promptRunner(context)
-                .withTools(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
+                .withTools(CoreToolGroups.WEB, CoreToolGroups.MATH)
                 .withPromptElements(
                     travelers, ResponseFormat.HTML, config.toolCallControl,
                 )
