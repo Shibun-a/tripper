@@ -44,6 +44,7 @@ import com.embabel.tripper.verification.ItineraryVerificationRequest
 import com.embabel.tripper.verification.ItineraryVerificationService
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.ConfigurationProperties
+import java.time.temporal.ChronoUnit
 
 @ConfigurationProperties("embabel.tripper")
 data class TripperConfig(
@@ -56,8 +57,11 @@ data class TripperConfig(
     val toolCallControl: ToolCallControl = ToolCallControl(4),
     val thinkerLlm: LlmOptions,
     val maxConcurrency: Int = 12,
-    // Upper bound on points of interest, to limit the parallel research fan-out.
-    val maxPointsOfInterest: Int = 6,
+    // Points of interest scale with trip length (pointsOfInterestPerDay * days), since research
+    // fans out one parallel LLM call per POI. maxPointsOfInterest is a hard ceiling so very long
+    // trips cannot blow up cost. Tune both via embabel.tripper.* .
+    val pointsOfInterestPerDay: Int = 5,
+    val maxPointsOfInterest: Int = 20,
 )
 
 private const val WEATHER_TOOLS = "weather"
@@ -147,6 +151,11 @@ class TripperAgent(
         context: OperationContext,
     ): ItineraryIdeas {
         val toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH, WEATHER_TOOLS)
+        val tripDays = (ChronoUnit.DAYS.between(travelBrief.departureDate, travelBrief.returnDate) + 1)
+            .coerceAtLeast(1)
+        val maxPois = (tripDays * config.pointsOfInterestPerDay)
+            .coerceAtMost(config.maxPointsOfInterest.toLong())
+            .toInt()
         val prompt = """
                 ${toolSafetyService.promptPolicy("findPointsOfInterest", toolNames)}
 
@@ -154,7 +163,7 @@ class TripperAgent(
 
                 Consider the following travel brief for a journey from ${travelBrief.from} to ${travelBrief.to}.
                 ${travelBrief.contribution()}
-                Find at most ${config.maxPointsOfInterest} points of interest that are relevant to the travel brief and travelers.
+                Find at most $maxPois points of interest that are relevant to the travel brief and travelers.
                 Use mapping tools to consider appropriate order and put a rough date
                 range for each point of interest.
                 Consider likely weather
