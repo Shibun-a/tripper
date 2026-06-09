@@ -1,0 +1,39 @@
+package com.embabel.tripper.rag;
+
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.transformers.TransformersEmbeddingModel;
+import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * Wires the local embedding model and the in-memory vector store used for travel-knowledge RAG.
+ * Both go through Spring AI's {@link EmbeddingModel} / {@link VectorStore} interfaces, so the
+ * implementation can later be swapped (e.g. a domestic embedding API or pgvector) without
+ * touching the agent or the service.
+ */
+@Configuration
+public class RagConfig {
+
+    /**
+     * Local ONNX embedding model (all-MiniLM-L6-v2 by default). Runs on CPU, offline after a
+     * one-time model download — no cross-border API calls. {@code afterPropertiesSet()} loads
+     * the model automatically when Spring creates the bean.
+     */
+    @Bean
+    public TransformersEmbeddingModel travelKnowledgeEmbeddingModel() {
+        return new TransformersEmbeddingModel();
+    }
+
+    /**
+     * In-memory vector store for knowledge chunks, explicitly bound to the local embedding model
+     * so it does not pick up the OpenAI {@link EmbeddingModel} beans embabel also registers.
+     */
+    @Bean
+    public VectorStore travelKnowledgeVectorStore(
+            @Qualifier("travelKnowledgeEmbeddingModel") EmbeddingModel embeddingModel) {
+        return SimpleVectorStore.builder(embeddingModel).build();
+    }
+}
