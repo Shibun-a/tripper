@@ -7,18 +7,23 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Stores document metadata for the /knowledge listing and tracks which vector-store chunk ids
+ * belong to each document (so they can be removed on clear). The chunk embeddings themselves
+ * live in the {@link org.springframework.ai.vectorstore.VectorStore}.
+ */
 @Repository
 public class TravelKnowledgeRepository {
 
     private final ConcurrentHashMap<String, TravelKnowledgeDocument> documents = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<String, List<IndexedTravelKnowledgeChunk>> chunksByDocument = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, List<String>> chunkIdsByDocument = new ConcurrentHashMap<>();
 
     public TravelKnowledgeDocument save(
             TravelKnowledgeDocument document,
-            List<IndexedTravelKnowledgeChunk> chunks
+            List<String> chunkIds
     ) {
         documents.put(document.getId(), document);
-        chunksByDocument.put(document.getId(), List.copyOf(chunks));
+        chunkIdsByDocument.put(document.getId(), List.copyOf(chunkIds));
         return document;
     }
 
@@ -28,14 +33,14 @@ public class TravelKnowledgeRepository {
                 .toList();
     }
 
-    List<IndexedTravelKnowledgeChunk> findAllChunks() {
-        List<IndexedTravelKnowledgeChunk> chunks = new ArrayList<>();
-        chunksByDocument.values().forEach(chunks::addAll);
-        return chunks;
+    public List<String> allChunkIds() {
+        List<String> ids = new ArrayList<>();
+        chunkIdsByDocument.values().forEach(ids::addAll);
+        return ids;
     }
 
     public void clear() {
         documents.clear();
-        chunksByDocument.clear();
+        chunkIdsByDocument.clear();
     }
 }

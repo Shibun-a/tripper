@@ -2,11 +2,13 @@ package com.embabel.tripper.rag;
 
 import com.embabel.tripper.safety.ContentSafetyService;
 import com.embabel.tripper.safety.SafetyAssessment;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.SearchRequest;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -15,6 +17,12 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+/**
+ * Imports travel knowledge, splits it into chunks, embeds each chunk with a local embedding model
+ * and retrieves the most semantically relevant chunks for a query via a vector store. Replaces the
+ * earlier keyword (term-frequency + cosine) retrieval; the public surface is unchanged so the agent
+ * integration ({@code TripperAgent.retrieveTravelKnowledge}) is untouched.
+ */
 @Service
 public class TravelKnowledgeService {
 
@@ -25,18 +33,30 @@ public class TravelKnowledgeService {
             "trip", "travel", "route", "day", "days"
     );
 
+    private static final String META_DOCUMENT_ID = "documentId";
+    private static final String META_DOCUMENT_TITLE = "documentTitle";
+    private static final String META_SOURCE_TYPE = "sourceType";
+    private static final String META_SOURCE = "source";
+    private static final String META_CHUNK_INDEX = "chunkIndex";
+
     private final TravelKnowledgeRepository repository;
     private final RestClient restClient;
     private final ContentSafetyService contentSafetyService;
+    private final VectorStore vectorStore;
+    private final RagProperties properties;
 
     public TravelKnowledgeService(
             TravelKnowledgeRepository repository,
             RestClient restClient,
-            ContentSafetyService contentSafetyService
+            ContentSafetyService contentSafetyService,
+            VectorStore vectorStore,
+            RagProperties properties
     ) {
         this.repository = repository;
         this.restClient = restClient;
         this.contentSafetyService = contentSafetyService;
+        this.vectorStore = vectorStore;
+        this.properties = properties;
     }
 
     public TravelKnowledgeDocument addPastedText(
@@ -90,6 +110,10 @@ public class TravelKnowledgeService {
     }
 
     public void clear() {
+        List<String> chunkIds = repository.allChunkIds();
+        if (!chunkIds.isEmpty()) {
+            vectorStore.delete(chunkIds);
+        }
         repository.clear();
     }
 
@@ -103,48 +127,67 @@ public class TravelKnowledgeService {
     public List<TravelKnowledgeHit> search(
             String query
     ) {
-        return search(query, 8);
+        return search(query, properties.getTopK());
     }
 
     public List<TravelKnowledgeHit> search(
             String query,
             int limit
     ) {
-        Map<String, Integer> queryVector = termVector(query);
-        if (queryVector.isEmpty()) {
+        if (isBlank(query)) {
             return List.of();
         }
 
-        return repository.findAllChunks().stream()
-                .map(chunk -> toHit(queryVector, chunk))
-                .filter(hit -> hit.getScore() > 0.0)
-                .sorted(Comparator.comparingDouble(TravelKnowledgeHit::getScore).reversed())
-                .limit(Math.max(1, limit))
-                .toList();
+        SearchRequest request = SearchRequest.builder()
+                .query(query)
+                .topK(Math.max(1, limit))
+                .similarityThreshold(properties.getSimilarityThreshold())
+                .build();
+
+        List<Document> results = vectorStore.similaritySearch(request);
+        if (results == null || results.isEmpty()) {
+            return List.of();
+        }
+
+        Set<String> queryTokens = new HashSet<>(tokenize(query));
+        List<TravelKnowledgeHit> hits = new ArrayList<>();
+        for (Document result : results) {
+            hits.add(toHit(result, queryTokens));
+        }
+        return hits;
     }
 
     private TravelKnowledgeHit toHit(
-            Map<String, Integer> queryVector,
-            IndexedTravelKnowledgeChunk chunk
+            Document result,
+            Set<String> queryTokens
     ) {
-        double score = cosineSimilarity(queryVector, chunk.getTermVector());
-        Set<String> matched = new HashSet<>(queryVector.keySet());
-        matched.retainAll(chunk.getTermVector().keySet());
+        Map<String, Object> metadata = result.getMetadata();
+        String documentId = asString(metadata.get(META_DOCUMENT_ID));
+        String documentTitle = asString(metadata.get(META_DOCUMENT_TITLE));
+        TravelKnowledgeSourceType sourceType = TravelKnowledgeSourceType.valueOf(
+                asString(metadata.get(META_SOURCE_TYPE)));
+        String source = asString(metadata.get(META_SOURCE));
+        int chunkIndex = metadata.get(META_CHUNK_INDEX) instanceof Number n ? n.intValue() : 0;
+        String text = result.getText() == null ? "" : result.getText();
+        double score = result.getScore() == null ? 0.0 : result.getScore();
+
+        // Keyword overlap is no longer used for ranking; we keep it only as a display annotation
+        // in the retrieval-debug view.
+        Set<String> matched = new HashSet<>(queryTokens);
+        matched.retainAll(new HashSet<>(tokenize(text)));
         List<String> matchedTerms = matched.stream().sorted().toList();
-        SafetyAssessment safetyAssessment = contentSafetyService.assessUntrustedContent(
-                chunk.getSource(),
-                chunk.getText()
-        );
+
+        SafetyAssessment safetyAssessment = contentSafetyService.assessUntrustedContent(source, text);
 
         return new TravelKnowledgeHit(
-                chunk.getDocumentId(),
-                chunk.getDocumentTitle(),
-                chunk.getSourceType(),
-                chunk.getSource(),
-                chunk.getChunkId(),
-                chunk.getChunkIndex(),
-                chunk.getText(),
-                contentSafetyService.sanitizeUntrustedTextForPrompt(chunk.getText(), safetyAssessment),
+                documentId,
+                documentTitle,
+                sourceType,
+                source,
+                result.getId(),
+                chunkIndex,
+                text,
+                contentSafetyService.sanitizeUntrustedTextForPrompt(text, safetyAssessment),
                 score,
                 matchedTerms,
                 safetyAssessment
@@ -170,29 +213,36 @@ public class TravelKnowledgeService {
                 normalizedContent
         );
 
-        List<IndexedTravelKnowledgeChunk> chunks = new ArrayList<>();
-        List<String> textChunks = chunkText(normalizedContent, 140, 25);
-        for (int i = 0; i < textChunks.size(); i++) {
-            String textChunk = textChunks.get(i);
-            Map<String, Integer> termVector = termVector(textChunk);
-            if (!termVector.isEmpty()) {
-                chunks.add(new IndexedTravelKnowledgeChunk(
-                        document.getId(),
-                        document.getTitle(),
-                        document.getSourceType(),
-                        document.getSource(),
-                        document.getId() + "-" + i,
-                        i,
-                        textChunk,
-                        termVector
-                ));
+        List<String> textChunks = chunkText(
+                normalizedContent,
+                properties.getChunkSizeWords(),
+                properties.getChunkOverlapWords());
+
+        List<Document> vectorDocuments = new ArrayList<>();
+        List<String> chunkIds = new ArrayList<>();
+        int chunkIndex = 0;
+        for (String textChunk : textChunks) {
+            if (textChunk.isBlank()) {
+                continue;
             }
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put(META_DOCUMENT_ID, document.getId());
+            metadata.put(META_DOCUMENT_TITLE, document.getTitle());
+            metadata.put(META_SOURCE_TYPE, document.getSourceType().name());
+            metadata.put(META_SOURCE, document.getSource());
+            metadata.put(META_CHUNK_INDEX, chunkIndex++);
+
+            Document vectorDocument = new Document(textChunk, metadata);
+            vectorDocuments.add(vectorDocument);
+            chunkIds.add(vectorDocument.getId());
         }
 
-        if (chunks.isEmpty()) {
+        if (vectorDocuments.isEmpty()) {
             throw new IllegalArgumentException("Knowledge content did not contain searchable text");
         }
-        return repository.save(document, chunks);
+
+        vectorStore.add(vectorDocuments);
+        return repository.save(document, chunkIds);
     }
 
     private List<String> chunkText(
@@ -222,14 +272,6 @@ public class TravelKnowledgeService {
         return chunks;
     }
 
-    private Map<String, Integer> termVector(String text) {
-        Map<String, Integer> vector = new HashMap<>();
-        for (String token : tokenize(text)) {
-            vector.merge(token, 1, Integer::sum);
-        }
-        return vector;
-    }
-
     private List<String> tokenize(String text) {
         if (text == null || text.isBlank()) {
             return List.of();
@@ -245,37 +287,6 @@ public class TravelKnowledgeService {
         return tokens;
     }
 
-    private double cosineSimilarity(
-            Map<String, Integer> left,
-            Map<String, Integer> right
-    ) {
-        Set<String> common = new HashSet<>(left.keySet());
-        common.retainAll(right.keySet());
-        if (common.isEmpty()) {
-            return 0.0;
-        }
-
-        double dot = 0.0;
-        for (String term : common) {
-            dot += left.getOrDefault(term, 0) * right.getOrDefault(term, 0);
-        }
-
-        double leftMagnitude = magnitude(left);
-        double rightMagnitude = magnitude(right);
-        if (leftMagnitude == 0.0 || rightMagnitude == 0.0) {
-            return 0.0;
-        }
-        return dot / (leftMagnitude * rightMagnitude);
-    }
-
-    private double magnitude(Map<String, Integer> vector) {
-        int sum = 0;
-        for (int value : vector.values()) {
-            sum += value * value;
-        }
-        return Math.sqrt(sum);
-    }
-
     private String htmlToText(String html) {
         return html
                 .replaceAll("(?is)<script.*?</script>", " ")
@@ -287,6 +298,10 @@ public class TravelKnowledgeService {
                 .replace("&gt;", ">")
                 .replaceAll("\\s+", " ")
                 .trim();
+    }
+
+    private String asString(Object value) {
+        return value == null ? "" : value.toString();
     }
 
     private boolean isBlank(String value) {
