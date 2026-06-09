@@ -51,9 +51,13 @@ data class TripperConfig(
     val imageWidth: Int = 800,
     val planner: Actor<Persona>,
     val researcher: Actor<RoleGoalBackstory>,
-    val toolCallControl: ToolCallControl = ToolCallControl(),
+    // Cap tool calls per LLM step to bound token cost and latency (each tool result is fed
+    // back into the model context). Override via embabel.tripper.tool-call-control.tool-calls.
+    val toolCallControl: ToolCallControl = ToolCallControl(4),
     val thinkerLlm: LlmOptions,
     val maxConcurrency: Int = 12,
+    // Upper bound on points of interest, to limit the parallel research fan-out.
+    val maxPointsOfInterest: Int = 6,
 )
 
 private const val WEATHER_TOOLS = "weather"
@@ -150,7 +154,7 @@ class TripperAgent(
 
                 Consider the following travel brief for a journey from ${travelBrief.from} to ${travelBrief.to}.
                 ${travelBrief.contribution()}
-                Find points of interest that are relevant to the travel brief and travelers.
+                Find at most ${config.maxPointsOfInterest} points of interest that are relevant to the travel brief and travelers.
                 Use mapping tools to consider appropriate order and put a rough date
                 range for each point of interest.
                 Consider likely weather
@@ -173,6 +177,7 @@ class TripperAgent(
                 .withPromptElements(
                     config.planner,
                     travelers,
+                    config.toolCallControl,
                 ).withTools(
                     CoreToolGroups.WEB,
                     CoreToolGroups.MAPS,
@@ -341,7 +346,7 @@ class TripperAgent(
             config.planner.promptRunner(context)
                 .withTools(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
                 .withPromptElements(
-                    travelers, ResponseFormat.HTML,
+                    travelers, ResponseFormat.HTML, config.toolCallControl,
                 )
                 .create(
                     prompt = prompt,
