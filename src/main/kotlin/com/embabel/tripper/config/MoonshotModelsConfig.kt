@@ -60,4 +60,7 @@ class MoonshotModelsConfig(
 
     @Bean
     fun kimiK2(): Llm = kimi("kimi-k2", 0.6, 2.3)
+
+    @Bean
+    fun kimiK25(): Llm = kimi("kimi-k2.5", 0.6, 2.3)
 }
