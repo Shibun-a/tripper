@@ -54,6 +54,25 @@
 
     <script>
         const processId = '[[${processId}]]';
+
+        // Human-readable, localized labels for the agent's action names (which arrive as fully
+        // qualified class method names like com.embabel...TripperAgent.findPointsOfInterest).
+        const stepLabels = {
+            confirmExpensiveOperation: '[[#{step.confirmExpensiveOperation}]]',
+            retrieveTravelKnowledge: '[[#{step.retrieveTravelKnowledge}]]',
+            findPointsOfInterest: '[[#{step.findPointsOfInterest}]]',
+            researchPointsOfInterest: '[[#{step.researchPointsOfInterest}]]',
+            proposeTravelPlan: '[[#{step.proposeTravelPlan}]]',
+            verifyAndRepairTravelPlan: '[[#{step.verifyAndRepairTravelPlan}]]',
+            findPlacesToSleep: '[[#{step.findPlacesToSleep}]]',
+            postProcessHtml: '[[#{step.postProcessHtml}]]'
+        };
+
+        function friendlyAction(name) {
+            const shortName = String(name || '').split('.').pop().replace('_', ' ');
+            return stepLabels[shortName] || shortName;
+        }
+
         const eventSource = new EventSource(`/events/process/${processId}`);
         const updatesContainer = document.getElementById('sse-updates');
         const initMessage = document.getElementById('init-message');
@@ -99,7 +118,7 @@
 
                             return `<li class="plan-action-item">
             <div class="action-icon">${icon}</div>
-            <div class="action-name">${action}</div>
+            <div class="action-name">${friendlyAction(action)}</div>
          </li>`;
                         }).join('');
 
@@ -121,7 +140,7 @@
 
                 case 'ActionExecutionStartEvent':
                     headerText = `🚀 Executing Action`;
-                    detailsText = data.action?.name?.replace('_', ' ') || 'Unknown action';
+                    detailsText = friendlyAction(data.action?.name) || 'Unknown action';
                     break;
                 case 'ObjectAddedEvent':
                     headerText = `➕ Object Added`;
