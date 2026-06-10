@@ -590,6 +590,7 @@ class TripperAgent(
                 proposal = plan.proposal.copy(
                     plan = StringTransformer.transform(
                         oldPlan, listOf(
+                            stripCodeFence,
                             styleImages,
                             removeUnsafeLinks,
                             ImageChecker.removeInvalidImageLinks,
@@ -604,6 +605,15 @@ class TripperAgent(
                 },
             )
         }
+    }
+
+    // Some models (e.g. via generateText) wrap the HTML body in a ```html ... ``` markdown fence;
+    // strip it so the literal backticks do not show in the rendered plan.
+    private val stripCodeFence = StringTransformer { html ->
+        html.trim()
+            .replace(Regex("^```[a-zA-Z]*\\s*"), "")
+            .replace(Regex("\\s*```$"), "")
+            .trim()
     }
 
     private val styleImages = StringTransformer { html ->
