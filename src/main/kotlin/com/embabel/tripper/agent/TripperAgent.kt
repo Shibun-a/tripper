@@ -45,6 +45,7 @@ import com.embabel.tripper.verification.ItineraryVerificationRequest
 import com.embabel.tripper.verification.ItineraryVerificationService
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.ConfigurationProperties
+import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
 @ConfigurationProperties("embabel.tripper")
@@ -355,12 +356,16 @@ class TripperAgent(
 
             // Call 1: small, JSON-friendly structured metadata (no HTML inside JSON).
             val meta = runner.create<ProposedTravelPlanMeta>(prompt = structurePrompt)
+            // Guarantee full date coverage in code so a model that omits dates can't trip DATE_GAP.
+            val days = completeDays(
+                meta.days, travelBrief.departureDate, travelBrief.returnDate, travelBrief.to,
+            )
 
             // Call 2: the long HTML body as plain text (no JSON escaping to get wrong).
             val planHtml = runner.withPromptElements(ResponseFormat.HTML).generateText(
                 """
                 $htmlPromptPrefix
-                ${meta.days.joinToString("\n") { "${it.date}: ${it.locationAndCountry}" }}
+                ${days.joinToString("\n") { "${it.date}: ${it.locationAndCountry}" }}
 
                 Start headings at <h4>, use paragraphs and unordered lists. Recount at least one
                 interesting story about a famous person associated with an area. Embed images only
@@ -379,7 +384,7 @@ class TripperAgent(
             ProposedTravelPlan(
                 title = meta.title,
                 plan = planHtml,
-                days = meta.days,
+                days = days,
                 imageLinks = meta.imageLinks,
                 videoLinks = meta.videoLinks,
                 pageLinks = meta.pageLinks,
@@ -666,6 +671,34 @@ class TripperAgent(
         IMPORTANT: keep place names and the "locationAndCountry" field in Google Maps friendly Latin form
         (for example Barcelona,+Spain); do NOT translate location values, URLs or citation ids.
         """.trimIndent()
+
+    /**
+     * Ensure every date from start to end has a day, filling gaps with the previous day's
+     * location. Models (especially OpenAI-compatible domestic ones) sometimes omit dates, which
+     * would otherwise trip the verifier's DATE_GAP check and force an avoidable repair pass.
+     */
+    private fun completeDays(
+        days: List<Day>,
+        start: LocalDate,
+        end: LocalDate,
+        fallbackLocation: String,
+    ): List<Day> {
+        val byDate = days.associateBy { it.date }
+        var lastLocation = days.firstOrNull()?.locationAndCountry?.takeIf { it.isNotBlank() } ?: fallbackLocation
+        val result = mutableListOf<Day>()
+        var cursor = start
+        while (!cursor.isAfter(end)) {
+            val existing = byDate[cursor]
+            if (existing != null && existing.locationAndCountry.isNotBlank()) {
+                lastLocation = existing.locationAndCountry
+                result.add(existing)
+            } else {
+                result.add(Day(cursor, lastLocation))
+            }
+            cursor = cursor.plusDays(1)
+        }
+        return result
+    }
 
     private fun isChinese(brief: JourneyTravelBrief): Boolean =
         brief.language.contains("chinese", ignoreCase = true) || brief.language.contains("中文")
