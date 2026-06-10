@@ -132,17 +132,17 @@ data class ProposedTravelPlan(
  */
 data class ProposedTravelPlanMeta(
     @param:JsonPropertyDescription("Catchy title appropriate to the travelers and travel brief, without dates")
-    val title: String,
+    val title: String = "Travel plan",
     @param:JsonPropertyDescription("One entry per travel date with its location in Google Maps form 'City,+Country'")
-    val days: List<Day>,
+    val days: List<Day> = emptyList(),
     @param:JsonPropertyDescription("Image links provided by the researchers")
-    val imageLinks: List<InternetResource>,
+    val imageLinks: List<InternetResource> = emptyList(),
     @param:JsonPropertyDescription("Video links provided by the researchers")
-    val videoLinks: List<InternetResource>,
+    val videoLinks: List<InternetResource> = emptyList(),
     @param:JsonPropertyDescription("Links to pages with more information")
-    val pageLinks: List<InternetResource>,
+    val pageLinks: List<InternetResource> = emptyList(),
     @param:JsonPropertyDescription("Country names that the travelers will visit")
-    val countriesVisited: List<String>,
+    val countriesVisited: List<String> = emptyList(),
 )
 
 data class VerifiedTravelPlanProposal(
