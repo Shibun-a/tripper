@@ -27,7 +27,7 @@ public class PlanEditController {
     ) {
         PlanEditSession session = planEditingService.findSession(runId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Editable plan not found"));
-        model.addAttribute("session", session);
+        model.addAttribute("editSession", session);
         model.addAttribute("editForm", new PlanEditForm());
         return "plan-edit";
     }
@@ -43,7 +43,7 @@ public class PlanEditController {
                 editForm.getSelectedDate(),
                 editForm.getInstruction()
         );
-        model.addAttribute("session", session);
+        model.addAttribute("editSession", session);
         model.addAttribute("editForm", new PlanEditForm());
         return "plan-edit";
     }

@@ -1,30 +1,30 @@
 <html xmlns:th="http://www.thymeleaf.org"
       th:replace="~{common/layout :: layout(~{::title}, ~{::section})}">
 <head>
-    <title th:text="${session.title}">Edit Travel Plan</title>
+    <title th:text="${editSession.title}">Edit Travel Plan</title>
 </head>
 <body>
 <section>
-    <h2 th:text="${session.title}"></h2>
+    <h2 th:text="${editSession.title}"></h2>
 
     <p>
-        <a th:href="@{/runs/{id}(id=${session.runId})}">Run trace</a>
+        <a th:href="@{/runs/{id}(id=${editSession.runId})}">Run trace</a>
         <span style="margin: 0 0.5rem;">/</span>
         <a href="/travel/journey">Planner</a>
     </p>
 
     <h3>Constraints</h3>
-    <p th:text="${session.fromLocation + ' -> ' + session.toLocation + ' / ' + session.transportPreference}"></p>
-    <p th:text="${session.departureDate + ' to ' + session.returnDate + ' / daily budget $' + #numbers.formatDecimal(session.dailyBudget, 1, 0)}"></p>
-    <p th:text="${session.constraintsSummary}"></p>
+    <p th:text="${editSession.fromLocation + ' -> ' + editSession.toLocation + ' / ' + editSession.transportPreference}"></p>
+    <p th:text="${editSession.departureDate + ' to ' + editSession.returnDate + ' / daily budget $' + #numbers.formatDecimal(editSession.dailyBudget, 1, 0)}"></p>
+    <p th:text="${editSession.constraintsSummary}"></p>
 
     <h3>Edit</h3>
-    <form th:action="@{/plans/{id}/edit(id=${session.runId})}" th:object="${editForm}" method="post"
+    <form th:action="@{/plans/{id}/edit(id=${editSession.runId})}" th:object="${editForm}" method="post"
           style="margin-bottom: 1.5rem;">
         <label for="selectedDate">Scope</label>
         <select id="selectedDate" th:field="*{selectedDate}">
             <option value="all">All days</option>
-            <option th:each="day : ${session.latestVersion().days()}"
+            <option th:each="day : ${editSession.latestVersion().days()}"
                     th:value="${day.date()}"
                     th:text="${day.date() + ' - ' + day.stayingAt()}"></option>
         </select>
@@ -39,17 +39,17 @@
     <h3>Latest Version</h3>
     <p>
         <strong>Version:</strong>
-        <span th:text="${session.latestVersion().versionNumber()}"></span>
+        <span th:text="${editSession.latestVersion().versionNumber()}"></span>
         <span style="margin-left: 0.75rem;"><strong>Verification:</strong></span>
-        <span th:text="${session.latestVersion().verificationResult().status}"></span>
+        <span th:text="${editSession.latestVersion().verificationResult().status}"></span>
     </p>
-    <p th:text="${session.latestVersion().verificationResult().summary}"></p>
+    <p th:text="${editSession.latestVersion().verificationResult().summary}"></p>
 
-    <div th:if="${session.latestVersion().diff().hasChanges()}" style="margin-bottom: 1.5rem;">
+    <div th:if="${editSession.latestVersion().diff().hasChanges()}" style="margin-bottom: 1.5rem;">
         <h3>Diff</h3>
-        <p th:text="${session.latestVersion().diff().summary()}"></p>
+        <p th:text="${editSession.latestVersion().diff().summary()}"></p>
         <ul>
-            <li th:each="change : ${session.latestVersion().diff().changes()}">
+            <li th:each="change : ${editSession.latestVersion().diff().changes()}">
                 <strong th:text="${change.date() == null ? 'Global' : change.date()}"></strong>
                 <span th:text="${' before: ' + change.beforeValue()}"></span>
                 <span th:text="${' after: ' + change.afterValue()}"></span>
@@ -67,7 +67,7 @@
         </tr>
         </thead>
         <tbody>
-        <tr th:each="day : ${session.latestVersion().days()}">
+        <tr th:each="day : ${editSession.latestVersion().days()}">
             <td th:text="${day.date()}"></td>
             <td th:text="${day.locationAndCountry()}"></td>
             <td th:text="${day.editNote() == null ? '' : day.editNote()}"></td>
@@ -76,11 +76,11 @@
     </table>
 
     <h3>Plan</h3>
-    <div th:utext="${session.latestVersion().planHtml()}"></div>
+    <div th:utext="${editSession.latestVersion().planHtml()}"></div>
 
     <h3>Versions</h3>
     <ul>
-        <li th:each="version : ${session.versions}"
+        <li th:each="version : ${editSession.versions}"
             th:text="${'v' + version.versionNumber() + ' - ' + version.instruction() + ' - ' + version.verificationResult().status}"></li>
     </ul>
 </section>
