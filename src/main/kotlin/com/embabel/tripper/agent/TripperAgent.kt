@@ -61,8 +61,8 @@ data class TripperConfig(
     // Points of interest scale with trip length (pointsOfInterestPerDay * days), since research
     // fans out one parallel LLM call per POI. maxPointsOfInterest is a hard ceiling so very long
     // trips cannot blow up cost. Tune both via embabel.tripper.* .
-    val pointsOfInterestPerDay: Int = 3,
-    val maxPointsOfInterest: Int = 12,
+    val pointsOfInterestPerDay: Int = 2,
+    val maxPointsOfInterest: Int = 10,
     // When the user picks Chinese, the agent runs on these domestic (Moonshot/Kimi) models
     // instead of the overseas defaults above — domestic models are directly reachable (no EOF).
     val cnThinkerModel: String = "moonshot-v1-128k",
@@ -73,7 +73,7 @@ data class TripperConfig(
     val cnResearcherModel: String = "moonshot-v1-32k",
     // Per-POI research is summarized (truncated) before it is handed to the planner, so the
     // proposal prompt stays small — cheaper, faster, less likely to overflow or be ignored.
-    val researchSummaryCharacters: Int = 800,
+    val researchSummaryCharacters: Int = 500,
 )
 
 private const val WEATHER_TOOLS = "weather"
