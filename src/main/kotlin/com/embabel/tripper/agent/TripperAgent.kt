@@ -66,10 +66,10 @@ data class TripperConfig(
     // When the user picks Chinese, the agent runs on these domestic (Moonshot/Kimi) models
     // instead of the overseas defaults above — domestic models are directly reachable (no EOF).
     val cnThinkerModel: String = "moonshot-v1-128k",
-    // kimi-k2.5 (reasoning model) for the planner: it produces valid structured JSON for the
-    // HTML-bearing plan more reliably than the v1 models. Its tool-call limitation no longer
-    // applies because proposeTravelPlan runs without tools (below).
-    val cnPlannerModel: String = "kimi-k2.5",
+    // moonshot-v1-128k (non-thinking) for the planner. The plan is generated in two calls — a
+    // short structured metadata object plus a plain-text HTML body — so the model never has to
+    // emit HTML inside JSON (which Moonshot does unreliably) and we avoid k2.5's streaming format.
+    val cnPlannerModel: String = "moonshot-v1-128k",
     val cnResearcherModel: String = "moonshot-v1-32k",
     // Per-POI research is summarized (truncated) before it is handed to the planner, so the
     // proposal prompt stays small — cheaper, faster, less likely to overflow or be ignored.
@@ -298,88 +298,92 @@ class TripperAgent(
         poiFindings: PointOfInterestFindings,
         context: OperationContext,
     ): ProposedTravelPlan {
-        // No tools here: the planner only writes the itinerary from the research already gathered.
-        // Dropping tools keeps the structured-output call clean (tool-call interleaving was making
-        // some models return an empty plan field) and works with any model, thinking or not.
+        // No tools here: the planner only writes from the research already gathered.
         val toolNames = emptyList<String>()
-        val prompt = """
-                ${toolSafetyService.promptPolicy("proposeTravelPlan", toolNames)}
+        // Shared, compressed point-of-interest research used by both planner calls.
+        val poiSummary = poiFindings.pointsOfInterest.joinToString("\n\n") { finding ->
+            val research = finding.research.take(config.researchSummaryCharacters)
+            val links = finding.links.take(2).joinToString("; ") { "${it.summary}: ${it.url}" }
+            val images = finding.imageLinks.take(2).joinToString("; ") { it.url }
+            """
+                ${finding.pointOfInterest.name} (${finding.pointOfInterest.location})
+                $research
+                Links: $links
+                Image URLs (embed only these as images): $images
+            """.trimIndent()
+        }
 
+        val structurePrompt = """
                 ${languageInstruction(travelBrief)}
 
-                Given the following travel brief, create a detailed plan.
-                Give it a brief, catchy title that doesn't include dates,
-                but may consider season, mood or relate to travelers's interests.
-
-                Plan the journey to minimize travel time.
-                However, consider any important events or places of interest along the way
-                that might inform routing.
-                Include total distances.
+                From the travel brief and researched points of interest below, produce the plan's
+                STRUCTURE ONLY (no prose, no HTML):
+                - a brief, catchy title (no dates)
+                - days: one entry for EVERY date from ${travelBrief.departureDate} to ${travelBrief.returnDate},
+                  each with locationAndCountry in Google Maps friendly Latin form (e.g. Dijon,+France).
+                  Repeat the same location for consecutive days in the same town. Minimize travel time.
+                - imageLinks / videoLinks / pageLinks: ONLY links the researchers provided below
+                - countriesVisited
 
                 <brief>${travelBrief.contribution()}</brief>
-                Consider the weather in your recommendations.
 
-                User-provided travel knowledge:
-                ${knowledgeContext.contribution()}
-                If user-provided knowledge influences a recommendation, cite it inline using [KB:<citationId>].
-                Preserve the citation id exactly as provided.
-
-                Write up in ${config.wordCount} words or less.
-                Include links in text where appropriate and in the links field.
-                
-                Include the location for each day.
-                The "locationAndCountry" field for each day should be in the format <location,+Country> e.g.
-                Ghent,+Belgium
-                If successive days are in the same town, just repeat the same location.
-
-                Put image links where appropriate in text and also in the links field.
-                Links must specify opening in a new window.
-                IMPORTANT: Image links must have been provided by the researchers
-                          and not be general knowledge or from other web sites.
-
-                Recount at least one interesting story about a famous person
-                associated with an area.
-                
-                Include natural headings and paragraphs in HTML format.
-                Use unordered lists as appropriate.
-                Start any headings at <h4>
-                Embed images in text, with max width of ${config.imageWidth}px.
-                Be sure to include informative caption and alt text for each image.
-
-                Consider the following points of interest. The research is summarized to keep this
-                prompt compact; write a rich, detailed plan from it.
-                ${
-                    poiFindings.pointsOfInterest.joinToString("\n\n") { finding ->
-                        val research = finding.research.take(config.researchSummaryCharacters)
-                        val links = finding.links.take(2).joinToString("; ") { "${it.summary}: ${it.url}" }
-                        val images = finding.imageLinks.take(2).joinToString("; ") { it.url }
-                        """
-                    ${finding.pointOfInterest.name} (${finding.pointOfInterest.location})
-                    $research
-                    Links: $links
-                    Image URLs (embed only these as images): $images
-                """.trimIndent()
-                    }
-                }
+                Points of interest:
+                $poiSummary
             """.trimIndent()
+
+        val htmlPromptPrefix = """
+                ${languageInstruction(travelBrief)}
+
+                Write a detailed, engaging travel itinerary in HTML, ${config.wordCount} words or less.
+                Use exactly this day-by-day route (do not change locations or dates):
+            """.trimIndent()
+
         return tracedAction(
             context = context,
             actionName = "proposeTravelPlan",
             inputSummary = "poiFindings=${poiFindings.pointsOfInterest.size}, knowledgeHits=${knowledgeContext.hits.size}",
             modelName = "planner",
-            promptCharacters = prompt.length,
+            promptCharacters = structurePrompt.length,
             toolNames = toolNames,
             outputSummary = { "title=${it.title}, days=${it.days.size}, links=${it.pageLinks.size + it.imageLinks.size + it.videoLinks.size}" },
             completionCharacters = { it.plan.length },
         ) {
-            config.planner.promptRunner(context)
+            val runner = config.planner.promptRunner(context)
                 .withLanguageModel(travelBrief, config.cnPlannerModel)
-                .withPromptElements(
-                    travelers, ResponseFormat.HTML, config.toolCallControl,
-                )
-                .create(
-                    prompt = prompt,
-                )
+                .withPromptElements(travelers, config.toolCallControl)
+
+            // Call 1: small, JSON-friendly structured metadata (no HTML inside JSON).
+            val meta = runner.create<ProposedTravelPlanMeta>(prompt = structurePrompt)
+
+            // Call 2: the long HTML body as plain text (no JSON escaping to get wrong).
+            val planHtml = runner.withPromptElements(ResponseFormat.HTML).generateText(
+                """
+                $htmlPromptPrefix
+                ${meta.days.joinToString("\n") { "${it.date}: ${it.locationAndCountry}" }}
+
+                Start headings at <h4>, use paragraphs and unordered lists. Recount at least one
+                interesting story about a famous person associated with an area. Embed images only
+                from the researcher-provided URLs below, max width ${config.imageWidth}px, each with
+                an informative caption and alt text. If user knowledge influences a recommendation,
+                cite it inline using [KB:<citationId>] exactly as provided.
+
+                User-provided travel knowledge:
+                ${knowledgeContext.contribution()}
+
+                Points of interest research:
+                $poiSummary
+                """.trimIndent()
+            )
+
+            ProposedTravelPlan(
+                title = meta.title,
+                plan = planHtml,
+                days = meta.days,
+                imageLinks = meta.imageLinks,
+                videoLinks = meta.videoLinks,
+                pageLinks = meta.pageLinks,
+                countriesVisited = meta.countriesVisited,
+            )
         }
     }
 

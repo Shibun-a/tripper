@@ -125,6 +125,26 @@ data class ProposedTravelPlan(
     val countriesVisited: List<String>,
 )
 
+/**
+ * Structured metadata for a proposed plan, WITHOUT the long HTML body. Generated as a small,
+ * JSON-friendly object so that models with weaker JSON handling (e.g. OpenAI-compatible domestic
+ * endpoints) can produce it reliably; the HTML body is generated separately as plain text.
+ */
+data class ProposedTravelPlanMeta(
+    @param:JsonPropertyDescription("Catchy title appropriate to the travelers and travel brief, without dates")
+    val title: String,
+    @param:JsonPropertyDescription("One entry per travel date with its location in Google Maps form 'City,+Country'")
+    val days: List<Day>,
+    @param:JsonPropertyDescription("Image links provided by the researchers")
+    val imageLinks: List<InternetResource>,
+    @param:JsonPropertyDescription("Video links provided by the researchers")
+    val videoLinks: List<InternetResource>,
+    @param:JsonPropertyDescription("Links to pages with more information")
+    val pageLinks: List<InternetResource>,
+    @param:JsonPropertyDescription("Country names that the travelers will visit")
+    val countriesVisited: List<String>,
+)
+
 data class VerifiedTravelPlanProposal(
     val proposal: ProposedTravelPlan,
     val verificationResult: PlanVerificationResult,
