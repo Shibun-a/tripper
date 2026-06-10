@@ -66,8 +66,14 @@ data class TripperConfig(
     // When the user picks Chinese, the agent runs on these domestic (Moonshot/Kimi) models
     // instead of the overseas defaults above — domestic models are directly reachable (no EOF).
     val cnThinkerModel: String = "moonshot-v1-128k",
+    // moonshot-v1-128k for the planner: kimi-k2 returns 404 on this account, and kimi-k2.5 is a
+    // reasoning model that rejects the tool-calling flow. proposeTravelPlan runs without tools
+    // (below), so a plain non-thinking model produces the structured plan most reliably.
     val cnPlannerModel: String = "moonshot-v1-128k",
     val cnResearcherModel: String = "moonshot-v1-32k",
+    // Per-POI research is summarized (truncated) before it is handed to the planner, so the
+    // proposal prompt stays small — cheaper, faster, less likely to overflow or be ignored.
+    val researchSummaryCharacters: Int = 800,
 )
 
 private const val WEATHER_TOOLS = "weather"
@@ -292,10 +298,10 @@ class TripperAgent(
         poiFindings: PointOfInterestFindings,
         context: OperationContext,
     ): ProposedTravelPlan {
-        // MAPS is intentionally excluded here: the planner only needs to write prose, and the
-        // maps tools return very large turn-by-turn JSON that bloats this prompt (and made it
-        // prone to dropped/EOF connections). The journey map link is computed in code instead.
-        val toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MATH)
+        // No tools here: the planner only writes the itinerary from the research already gathered.
+        // Dropping tools keeps the structured-output call clean (tool-call interleaving was making
+        // some models return an empty plan field) and works with any model, thinking or not.
+        val toolNames = emptyList<String>()
         val prompt = """
                 ${toolSafetyService.promptPolicy("proposeTravelPlan", toolNames)}
 
@@ -340,15 +346,18 @@ class TripperAgent(
                 Embed images in text, with max width of ${config.imageWidth}px.
                 Be sure to include informative caption and alt text for each image.
 
-                Consider the following points of interest:
+                Consider the following points of interest. The research is summarized to keep this
+                prompt compact; write a rich, detailed plan from it.
                 ${
-                    poiFindings.pointsOfInterest.joinToString("\n") {
+                    poiFindings.pointsOfInterest.joinToString("\n\n") { finding ->
+                        val research = finding.research.take(config.researchSummaryCharacters)
+                        val links = finding.links.take(2).joinToString("; ") { "${it.summary}: ${it.url}" }
+                        val images = finding.imageLinks.take(2).joinToString("; ") { it.url }
                         """
-                    ${it.pointOfInterest.name}
-                    ${it.research}
-                    ${it.links.joinToString { link -> "${link.url}: ${link.summary}" }}
-                    Images: ${it.imageLinks.joinToString { link -> "${link.url}: ${link.summary}" }}
-                    Videos: ${it.videoLinks.joinToString { link -> "${link.url}: ${link.summary}" }}
+                    ${finding.pointOfInterest.name} (${finding.pointOfInterest.location})
+                    $research
+                    Links: $links
+                    Image URLs (embed only these as images): $images
                 """.trimIndent()
                     }
                 }
@@ -365,7 +374,6 @@ class TripperAgent(
         ) {
             config.planner.promptRunner(context)
                 .withLanguageModel(travelBrief, config.cnPlannerModel)
-                .withTools(CoreToolGroups.WEB, CoreToolGroups.MATH)
                 .withPromptElements(
                     travelers, ResponseFormat.HTML, config.toolCallControl,
                 )
