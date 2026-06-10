@@ -66,10 +66,10 @@ data class TripperConfig(
     // When the user picks Chinese, the agent runs on these domestic (Moonshot/Kimi) models
     // instead of the overseas defaults above — domestic models are directly reachable (no EOF).
     val cnThinkerModel: String = "moonshot-v1-128k",
-    // moonshot-v1-128k for the planner: kimi-k2 returns 404 on this account, and kimi-k2.5 is a
-    // reasoning model that rejects the tool-calling flow. proposeTravelPlan runs without tools
-    // (below), so a plain non-thinking model produces the structured plan most reliably.
-    val cnPlannerModel: String = "moonshot-v1-128k",
+    // kimi-k2.5 (reasoning model) for the planner: it produces valid structured JSON for the
+    // HTML-bearing plan more reliably than the v1 models. Its tool-call limitation no longer
+    // applies because proposeTravelPlan runs without tools (below).
+    val cnPlannerModel: String = "kimi-k2.5",
     val cnResearcherModel: String = "moonshot-v1-32k",
     // Per-POI research is summarized (truncated) before it is handed to the planner, so the
     // proposal prompt stays small — cheaper, faster, less likely to overflow or be ignored.
