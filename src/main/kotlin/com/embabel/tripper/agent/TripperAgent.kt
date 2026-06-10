@@ -279,7 +279,8 @@ class TripperAgent(
                 ${knowledgeContext.contribution()}
             """.trimIndent(),
                 )
-                rpi
+                // Force the correct POI even if the model dropped it from its JSON.
+                rpi.copy(pointOfInterest = poi)
             }
             PointOfInterestFindings(
                 pointsOfInterest = poiFindings,

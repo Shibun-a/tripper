@@ -84,13 +84,15 @@ data class ItineraryIdeas(
 )
 
 data class ResearchedPointOfInterest(
-    val pointOfInterest: PointOfInterest,
-    val research: String,
-    override val links: List<InternetResource>,
+    // Defaults make binding tolerant of models that intermittently omit fields; the caller
+    // overwrites pointOfInterest with the known input POI regardless.
+    val pointOfInterest: PointOfInterest = PointOfInterest("", "", "", LocalDate.now(), LocalDate.now()),
+    val research: String = "",
+    override val links: List<InternetResource> = emptyList(),
     @param:JsonPropertyDescription("Links to videos, from YouTube or other")
-    val videoLinks: List<InternetResource>,
+    val videoLinks: List<InternetResource> = emptyList(),
     @param:JsonPropertyDescription("Links to images. Links must be the images themselves, not just links to them.")
-    val imageLinks: List<InternetResource>,
+    val imageLinks: List<InternetResource> = emptyList(),
 ) : InternetResources
 
 data class PointOfInterestFindings(
