@@ -18,6 +18,7 @@ package com.embabel.tripper.agent
 import com.embabel.agent.api.annotation.*
 import com.embabel.agent.api.common.Actor
 import com.embabel.agent.api.common.OperationContext
+import com.embabel.agent.api.common.PromptRunner
 import com.embabel.agent.api.common.SomeOf
 import com.embabel.agent.api.common.create
 import com.embabel.agent.core.CoreToolGroups
@@ -62,6 +63,11 @@ data class TripperConfig(
     // trips cannot blow up cost. Tune both via embabel.tripper.* .
     val pointsOfInterestPerDay: Int = 3,
     val maxPointsOfInterest: Int = 12,
+    // When the user picks Chinese, the agent runs on these domestic (Moonshot/Kimi) models
+    // instead of the overseas defaults above — domestic models are directly reachable (no EOF).
+    val cnThinkerModel: String = "moonshot-v1-128k",
+    val cnPlannerModel: String = "moonshot-v1-128k",
+    val cnResearcherModel: String = "moonshot-v1-32k",
 )
 
 private const val WEATHER_TOOLS = "weather"
@@ -151,6 +157,7 @@ class TripperAgent(
         context: OperationContext,
     ): ItineraryIdeas {
         val toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH, WEATHER_TOOLS)
+        val thinkerLlm = if (isChinese(travelBrief)) LlmOptions.withModel(config.cnThinkerModel) else config.thinkerLlm
         val tripDays = (ChronoUnit.DAYS.between(travelBrief.departureDate, travelBrief.returnDate) + 1)
             .coerceAtLeast(1)
         val maxPois = (tripDays * config.pointsOfInterestPerDay)
@@ -175,14 +182,14 @@ class TripperAgent(
             context = context,
             actionName = "findPointsOfInterest",
             inputSummary = "route=${travelBrief.from}->${travelBrief.to}, knowledgeHits=${knowledgeContext.hits.size}",
-            modelName = modelName(config.thinkerLlm),
+            modelName = modelName(thinkerLlm),
             promptCharacters = prompt.length,
             toolNames = toolNames,
             outputSummary = { "pointsOfInterest=${it.pointsOfInterest.size}" },
             completionCharacters = { it.pointsOfInterest.sumOf { poi -> poi.name.length + poi.description.length } },
         ) {
             context.ai()
-                .withLlm(config.thinkerLlm)
+                .withLlm(thinkerLlm)
                 .withPromptElements(
                     config.planner,
                     travelers,
@@ -229,6 +236,7 @@ class TripperAgent(
                 itineraryIdeas.pointsOfInterest.sortedBy { it.name }.joinToString { it.name },
             )
             val promptRunner = config.researcher.promptRunner(context)
+                .withLanguageModel(travelBrief, config.cnResearcherModel)
                 .withPromptElements(travelers, config.toolCallControl)
                 .withTools(
                     CoreToolGroups.WEB,
@@ -356,6 +364,7 @@ class TripperAgent(
             completionCharacters = { it.plan.length },
         ) {
             config.planner.promptRunner(context)
+                .withLanguageModel(travelBrief, config.cnPlannerModel)
                 .withTools(CoreToolGroups.WEB, CoreToolGroups.MATH)
                 .withPromptElements(
                     travelers, ResponseFormat.HTML, config.toolCallControl,
@@ -448,6 +457,7 @@ class TripperAgent(
                 }
             """.trimIndent()
             val repairedPlan = config.planner.promptRunner(context)
+                .withLanguageModel(travelBrief, config.cnPlannerModel)
                 .withTools(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
                 .withPromptElements(
                     travelers, ResponseFormat.HTML,
@@ -643,6 +653,13 @@ class TripperAgent(
         IMPORTANT: keep place names and the "locationAndCountry" field in Google Maps friendly Latin form
         (for example Barcelona,+Spain); do NOT translate location values, URLs or citation ids.
         """.trimIndent()
+
+    private fun isChinese(brief: JourneyTravelBrief): Boolean =
+        brief.language.contains("chinese", ignoreCase = true) || brief.language.contains("中文")
+
+    /** When the user picked Chinese, run this prompt on the configured domestic (Moonshot) model. */
+    private fun PromptRunner.withLanguageModel(brief: JourneyTravelBrief, model: String): PromptRunner =
+        if (isChinese(brief)) withLlm(LlmOptions.withModel(model)) else this
 
     private fun modelName(options: LlmOptions): String? =
         options.model ?: options.role ?: options.criteria.toString()
