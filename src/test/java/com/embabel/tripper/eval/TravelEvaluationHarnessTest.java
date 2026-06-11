@@ -11,6 +11,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TravelEvaluationHarnessTest {
@@ -70,6 +71,46 @@ class TravelEvaluationHarnessTest {
         assertTrue(Files.exists(writtenReports.markdownPath()));
         assertTrue(Files.readString(writtenReports.jsonPath()).contains("\"caseCount\" : 5"));
         assertTrue(Files.readString(writtenReports.markdownPath()).contains("Travel Agent Evaluation Report"));
+    }
+
+    @Test
+    void threadsJudgeScoresIntoResultsAndMetrics() throws Exception {
+        // Fake judge (functional interface) returns a fixed score; proves the harness wires judge
+        // output into per-case results, the aggregate average, and the markdown — no LLM/network.
+        PlanJudge fakeJudge = (planText, interests, constraints, themes, countries) ->
+                new JudgeScores(4, 4, 4, 4, 4, "fixed test score");
+        TravelEvaluationHarness harness = new TravelEvaluationHarness(
+                new DeterministicEvalPlanCandidateFactory(),
+                new ItineraryVerificationService(new PlanVerificationRepository()),
+                fakeJudge
+        );
+
+        EvaluationReport report = harness.run(
+                TravelEvalDataset.loadDefault(),
+                TravelEvalDataset.DEFAULT_PATH.toString(),
+                3
+        );
+
+        assertEquals(3, report.metrics().caseCount());
+        assertEquals(4.0, report.metrics().averageJudgeOverall());
+        assertTrue(report.cases().stream().allMatch(result -> result.judgeScores() != null));
+        assertEquals(4.0, report.cases().get(0).judgeScores().averageScore());
+        String markdown = report.toMarkdown();
+        assertTrue(markdown.contains("Avg judge score"));
+        assertTrue(markdown.contains("Judge (1-5)"));
+    }
+
+    @Test
+    void leavesJudgeNullWhenNoJudgeConfigured() throws Exception {
+        EvaluationReport report = harness().run(
+                TravelEvalDataset.loadDefault(),
+                TravelEvalDataset.DEFAULT_PATH.toString(),
+                3
+        );
+
+        assertNull(report.metrics().averageJudgeOverall());
+        assertTrue(report.cases().stream().allMatch(result -> result.judgeScores() == null));
+        assertFalse(report.toMarkdown().contains("Avg judge score"));
     }
 
     private TravelEvaluationHarness harness() {
