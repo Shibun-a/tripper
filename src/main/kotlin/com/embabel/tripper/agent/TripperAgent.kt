@@ -402,7 +402,10 @@ class TripperAgent(
         proposedPlan: ProposedTravelPlan,
         context: OperationContext,
     ): VerifiedTravelPlanProposal {
-        val toolNames = listOf(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
+        // No tools here: like proposeTravelPlan, the repair only rewrites from existing research,
+        // and the two-call split (structure JSON + plain-text HTML) keeps it reliable on domestic
+        // OpenAI-compatible models that produce HTML-in-JSON unreliably.
+        val toolNames = emptyList<String>()
         return tracedAction(
             context = context,
             actionName = "verifyAndRepairTravelPlan",
@@ -429,17 +432,22 @@ class TripperAgent(
                 verification.issues.joinToString { "${it.category}:${it.message}" },
             )
 
-            val repairPrompt = """
-                ${toolSafetyService.promptPolicy("verifyAndRepairTravelPlan", toolNames)}
+            val repairPoiSummary = poiFindings.pointsOfInterest.joinToString("\n") {
+                """
+                ${it.pointOfInterest.name}
+                ${it.research}
+                ${it.links.joinToString { link -> "${link.url}: ${link.summary}" }}
+            """.trimIndent()
+            }
 
+            // Context shared by both repair calls. Keeping it identical across the structure and
+            // HTML passes ensures they describe the same repaired trip.
+            val repairContext = """
                 ${languageInstruction(travelBrief)}
 
-                The itinerary verifier found blocking issues in the proposed travel plan.
-                Repair the plan before it is shown to the user.
-
-                Keep the user's trip intent, travelers, destination, date range, and style.
-                Return a complete ProposedTravelPlan, not a diff.
-                Preserve useful recommendations and citations where they are still valid.
+                The itinerary verifier found blocking issues in the proposed travel plan. Repair it
+                before it is shown to the user. Keep the user's trip intent, travelers, destination,
+                date range and style; preserve still-valid recommendations and citations.
 
                 <brief>${travelBrief.contribution()}</brief>
 
@@ -449,40 +457,62 @@ class TripperAgent(
                 Structured verifier issues:
                 ${verification.contribution()}
 
-                Required repairs:
-                - Cover every date from ${travelBrief.departureDate} to ${travelBrief.returnDate} exactly once.
-                - Use a non-empty locationAndCountry for every day.
-                - Keep each locationAndCountry in Google Maps friendly format, for example Dijon,+France.
-                - Remove or replace invalid URLs.
-                - Keep recommendations within the requested daily budget where possible.
-                - If user-provided knowledge influences a recommendation, cite it inline using [KB:<citationId>].
-
-                Original plan:
-                ${proposedPlan.plan}
-
                 Original days:
                 ${proposedPlan.days.joinToString("\n") { "${it.date}: ${it.locationAndCountry}" }}
 
                 Relevant point-of-interest research:
-                ${
-                    poiFindings.pointsOfInterest.joinToString("\n") {
-                        """
-                    ${it.pointOfInterest.name}
-                    ${it.research}
-                    ${it.links.joinToString { link -> "${link.url}: ${link.summary}" }}
-                """.trimIndent()
-                    }
-                }
+                $repairPoiSummary
             """.trimIndent()
-            val repairedPlan = config.planner.promptRunner(context)
+
+            val runner = config.planner.promptRunner(context)
                 .withLanguageModel(travelBrief, config.cnPlannerModel)
-                .withTools(CoreToolGroups.WEB, CoreToolGroups.MAPS, CoreToolGroups.MATH)
-                .withPromptElements(
-                    travelers, ResponseFormat.HTML,
-                )
-                .create<ProposedTravelPlan>(
-                    prompt = repairPrompt,
-                )
+                .withPromptElements(travelers, config.toolCallControl)
+
+            // Call 1: repaired STRUCTURE only (no HTML inside JSON) — same split as proposeTravelPlan.
+            val repairedMeta = runner.create<ProposedTravelPlanMeta>(
+                prompt = """
+                $repairContext
+
+                Produce the repaired plan's STRUCTURE ONLY (no prose, no HTML):
+                - a brief, catchy title (no dates)
+                - days: one entry for EVERY date from ${travelBrief.departureDate} to ${travelBrief.returnDate},
+                  each with a non-empty locationAndCountry in Google Maps friendly Latin form (e.g. Dijon,+France).
+                  Repeat the same location for consecutive days in the same town. Minimize travel time.
+                - imageLinks / videoLinks / pageLinks: drop invalid URLs, keep only valid ones
+                - countriesVisited
+            """.trimIndent()
+            )
+            // Guarantee full date coverage in code so a model that omits dates can't re-trip DATE_GAP.
+            val repairedDays = completeDays(
+                repairedMeta.days, travelBrief.departureDate, travelBrief.returnDate, travelBrief.to,
+            )
+
+            // Call 2: repaired HTML body as plain text (no JSON escaping to get wrong).
+            val repairedHtml = runner.withPromptElements(ResponseFormat.HTML).generateText(
+                """
+                $repairContext
+
+                Rewrite the travel itinerary in HTML to fix the issues above, ${config.wordCount} words or less.
+                Use exactly this day-by-day route (do not change locations or dates):
+                ${repairedDays.joinToString("\n") { "${it.date}: ${it.locationAndCountry}" }}
+
+                Start headings at <h4>, use paragraphs and unordered lists. Remove or replace invalid URLs.
+                If user knowledge influences a recommendation, cite it inline using [KB:<citationId>] exactly as provided.
+
+                Original plan to repair (do not restate verbatim):
+                ${proposedPlan.plan}
+            """.trimIndent()
+            )
+
+            val repairedPlan = ProposedTravelPlan(
+                title = repairedMeta.title,
+                plan = repairedHtml,
+                days = repairedDays,
+                imageLinks = repairedMeta.imageLinks,
+                videoLinks = repairedMeta.videoLinks,
+                pageLinks = repairedMeta.pageLinks,
+                countriesVisited = repairedMeta.countriesVisited,
+            )
 
             val repairedVerification = itineraryVerificationService.verifyProposal(
                 verificationRequest(
