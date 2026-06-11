@@ -18,8 +18,9 @@ import java.time.LocalDate
  *
  * Only active when MOONSHOT_API_KEY is set, so the project still builds/runs without it. The model
  * objects are created lazily and not validated against the API at startup, so registering a name
- * the account does not have only fails if that model is actually called. Pricing is approximate
- * (¥→$) and used for cost reporting only — adjust to your tier.
+ * the account does not have only fails if that model is actually called. Pricing is published CNY
+ * list price converted at a single FX constant (see below), used for cost reporting only — edit the
+ * rate or the per-model CNY figures to match your tier.
  */
 @Configuration
 @ConditionalOnProperty("MOONSHOT_API_KEY")
@@ -41,26 +42,34 @@ class MoonshotModelsConfig(
         requestFactory,
     )
 
-    private fun kimi(model: String, inputUsdPerM: Double, outputUsdPerM: Double): Llm =
+    // Moonshot publishes prices in CNY per 1M tokens. We keep the published CNY list prices below
+    // and convert with one explicit FX constant, so cost reporting is self-documenting and you can
+    // recalibrate by editing a single number (the rate, or a model's CNY figure) for your tier.
+    private val cnyPerUsd = 7.2
+
+    private fun usd(cnyPerMillion: Double): Double = cnyPerMillion / cnyPerUsd
+
+    private fun kimi(model: String, inputCnyPerM: Double, outputCnyPerM: Double): Llm =
         factory().openAiCompatibleLlm(
             model,
-            PricingModel.usdPer1MTokens(inputUsdPerM, outputUsdPerM),
+            PricingModel.usdPer1MTokens(usd(inputCnyPerM), usd(outputCnyPerM)),
             provider,
             knowledgeCutoff,
         )
 
+    // CNY/1M list prices (input, output). Update these to your actual contracted rates.
     @Bean
-    fun moonshotV1128k(): Llm = kimi("moonshot-v1-128k", 8.3, 8.3)
+    fun moonshotV1128k(): Llm = kimi("moonshot-v1-128k", 60.0, 60.0)
 
     @Bean
-    fun moonshotV132k(): Llm = kimi("moonshot-v1-32k", 3.3, 3.3)
+    fun moonshotV132k(): Llm = kimi("moonshot-v1-32k", 24.0, 24.0)
 
     @Bean
-    fun moonshotV18k(): Llm = kimi("moonshot-v1-8k", 1.7, 1.7)
+    fun moonshotV18k(): Llm = kimi("moonshot-v1-8k", 12.0, 12.0)
 
     @Bean
-    fun kimiK2(): Llm = kimi("kimi-k2", 0.6, 2.3)
+    fun kimiK2(): Llm = kimi("kimi-k2", 4.0, 16.0)
 
     @Bean
-    fun kimiK25(): Llm = kimi("kimi-k2.5", 0.6, 2.3)
+    fun kimiK25(): Llm = kimi("kimi-k2.5", 4.0, 16.0)
 }

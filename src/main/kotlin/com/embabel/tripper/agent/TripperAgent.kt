@@ -75,6 +75,10 @@ data class TripperConfig(
     // Per-POI research is summarized (truncated) before it is handed to the planner, so the
     // proposal prompt stays small — cheaper, faster, less likely to overflow or be ignored.
     val researchSummaryCharacters: Int = 500,
+    // Rough upper bound shown in the cost-confirmation prompt (USD). Measured end-to-end runs land
+    // around $0.45 (Chinese/Kimi) to $0.52 (English/Claude); 0.6 is an honest ceiling. Tune here
+    // rather than hardcoding it in the confirmation text.
+    val estimatedMaxCostUsd: Double = 0.6,
 )
 
 private const val WEATHER_TOOLS = "weather"
@@ -122,13 +126,16 @@ class TripperAgent(
                 // Take it as a given
                 return@tracedAction AcceptanceOfCost
             }
-            // Otherwise, explicitly ask the user for confirmation
-            confirm(
-                AcceptanceOfCost,
-                "Go ahead? Building a travel plan for ${
-                    travelers.travelers.map { it.name }.joinToString { " and " }
-                } will cost up to 20c"
-            )
+            // Otherwise, explicitly ask the user for confirmation. The ceiling is config-driven
+            // (estimatedMaxCostUsd) and the wording follows the user's chosen language.
+            val names = travelers.travelers.joinToString(separator = " and ") { it.name }
+            val estimate = "%.2f".format(config.estimatedMaxCostUsd)
+            val message = if (isChinese(travelBrief)) {
+                "继续吗?为 $names 生成旅行计划预计最多花费约 \$$estimate。"
+            } else {
+                "Go ahead? Building a travel plan for $names will cost up to about \$$estimate"
+            }
+            confirm(AcceptanceOfCost, message)
         }
     }
 

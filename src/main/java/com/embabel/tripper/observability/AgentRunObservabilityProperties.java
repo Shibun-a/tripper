@@ -9,7 +9,10 @@ public class AgentRunObservabilityProperties {
     private boolean capturePromptContent = false;
     private int maxSummaryCharacters = 240;
     private int maxRuns = 100;
-    private double costWarningThresholdUsd = 0.15;
+    // A normal end-to-end run costs ~$0.45 (Chinese/Kimi) to ~$0.52 (English/Claude), so the old
+    // 0.15 fired on every run and carried no signal. 0.75 leaves headroom above a normal run and
+    // only flags genuine overruns (runaway tool calls, retries). Override per your model/tier.
+    private double costWarningThresholdUsd = 0.75;
 
     public boolean isEnabled() {
         return enabled;
