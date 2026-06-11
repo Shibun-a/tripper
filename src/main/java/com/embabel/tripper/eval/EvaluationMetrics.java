@@ -10,6 +10,8 @@ public record EvaluationMetrics(
         double averageLatencyMs,
         double averageTokenCostUsd,
         int verifierErrorCount,
-        int verifierWarningCount
+        int verifierWarningCount,
+        // Mean of the judge's five-dimension average across judged cases; null when no judge ran.
+        Double averageJudgeOverall
 ) {
 }

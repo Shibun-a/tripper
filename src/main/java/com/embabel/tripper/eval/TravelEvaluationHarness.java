@@ -6,24 +6,40 @@ import com.embabel.tripper.verification.ItineraryVerificationService;
 import com.embabel.tripper.verification.PlanIssueCategory;
 import com.embabel.tripper.verification.PlanVerificationIssue;
 import com.embabel.tripper.verification.PlanVerificationResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.List;
+import java.util.OptionalDouble;
 import java.util.Set;
 
 public class TravelEvaluationHarness {
 
+    private static final Logger logger = LoggerFactory.getLogger(TravelEvaluationHarness.class);
+
     private final EvalPlanCandidateFactory candidateFactory;
     private final ItineraryVerificationService verificationService;
+    // Null in the deterministic CI tier; set in the agent tier to add subjective LLM-judge scores.
+    private final PlanJudge judge;
 
     public TravelEvaluationHarness(
             EvalPlanCandidateFactory candidateFactory,
             ItineraryVerificationService verificationService
     ) {
+        this(candidateFactory, verificationService, null);
+    }
+
+    public TravelEvaluationHarness(
+            EvalPlanCandidateFactory candidateFactory,
+            ItineraryVerificationService verificationService,
+            PlanJudge judge
+    ) {
         this.candidateFactory = candidateFactory;
         this.verificationService = verificationService;
+        this.judge = judge;
     }
 
     public EvaluationReport run(
@@ -64,6 +80,7 @@ public class TravelEvaluationHarness {
         double toolCallSuccessRate = candidate.toolCallAttempts() == 0
                 ? 1.0
                 : (double) candidate.successfulToolCalls() / candidate.toolCallAttempts();
+        JudgeScores judgeScores = judgeIfEnabled(evalCase, candidate);
 
         return new EvaluationCaseResult(
                 evalCase.id(),
@@ -79,14 +96,34 @@ public class TravelEvaluationHarness {
                 toolCallSuccessRate,
                 candidate.latencyMs(),
                 candidate.estimatedTokenCostUsd(),
-                verification.getIssues().stream().map(PlanVerificationIssue::getPromptLine).toList()
+                verification.getIssues().stream().map(PlanVerificationIssue::getPromptLine).toList(),
+                judgeScores
         );
+    }
+
+    private JudgeScores judgeIfEnabled(TravelEvalCase evalCase, EvalPlanCandidate candidate) {
+        if (judge == null) {
+            return null;
+        }
+        try {
+            return judge.judge(
+                    candidate.verificationRequest().planText(),
+                    evalCase.interests(),
+                    evalCase.constraints(),
+                    evalCase.expectedThemes(),
+                    evalCase.expectedCountries()
+            );
+        } catch (RuntimeException ex) {
+            // One judge failure should not abort the batch; record no score for this case.
+            logger.warn("Judge failed for eval case {}: {}", evalCase.id(), ex.getMessage());
+            return null;
+        }
     }
 
     private EvaluationMetrics aggregate(List<EvaluationCaseResult> results) {
         int caseCount = results.size();
         if (caseCount == 0) {
-            return new EvaluationMetrics(0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0, 0);
+            return new EvaluationMetrics(0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0, 0, null);
         }
 
         int citationRequired = (int) results.stream().filter(EvaluationCaseResult::citationRequired).count();
@@ -103,6 +140,11 @@ public class TravelEvaluationHarness {
                 .filter(result -> result.invalidLinkCount() > 0)
                 .count();
 
+        OptionalDouble judgeAverage = results.stream()
+                .filter(result -> result.judgeScores() != null)
+                .mapToDouble(result -> result.judgeScores().averageScore())
+                .average();
+
         return new EvaluationMetrics(
                 caseCount,
                 results.stream().mapToDouble(EvaluationCaseResult::dateCoverageRate).average().orElse(0.0),
@@ -113,7 +155,8 @@ public class TravelEvaluationHarness {
                 results.stream().mapToLong(EvaluationCaseResult::latencyMs).average().orElse(0.0),
                 results.stream().mapToDouble(EvaluationCaseResult::estimatedTokenCostUsd).average().orElse(0.0),
                 verifierErrors,
-                verifierWarnings
+                verifierWarnings,
+                judgeAverage.isPresent() ? judgeAverage.getAsDouble() : null
         );
     }
 

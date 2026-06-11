@@ -31,11 +31,16 @@ public record EvaluationReport(
         sb.append("| Average latency | ").append(String.format(Locale.ROOT, "%.1f ms", metrics.averageLatencyMs())).append(" |\n");
         sb.append("| Average token cost | $").append(String.format(Locale.ROOT, "%.4f", metrics.averageTokenCostUsd())).append(" |\n");
         sb.append("| Verifier errors | ").append(metrics.verifierErrorCount()).append(" |\n");
-        sb.append("| Verifier warnings | ").append(metrics.verifierWarningCount()).append(" |\n\n");
+        sb.append("| Verifier warnings | ").append(metrics.verifierWarningCount()).append(" |\n");
+        if (metrics.averageJudgeOverall() != null) {
+            sb.append("| Avg judge score (1-5) | ")
+                    .append(String.format(Locale.ROOT, "%.2f", metrics.averageJudgeOverall())).append(" |\n");
+        }
+        sb.append('\n');
 
         sb.append("## Cases\n\n");
-        sb.append("| Case | Status | Date Coverage | Errors | Warnings | Citation |\n");
-        sb.append("| --- | --- | ---: | ---: | ---: | --- |\n");
+        sb.append("| Case | Status | Date Coverage | Errors | Warnings | Citation | Judge (1-5) |\n");
+        sb.append("| --- | --- | ---: | ---: | ---: | --- | ---: |\n");
         for (EvaluationCaseResult result : cases) {
             sb.append("| `").append(result.id()).append("` | ")
                     .append(result.status()).append(" | ")
@@ -43,6 +48,10 @@ public record EvaluationReport(
                     .append(result.verifierErrorCount()).append(" | ")
                     .append(result.verifierWarningCount()).append(" | ")
                     .append(result.citationRequired() ? (result.citationSatisfied() ? "yes" : "no") : "n/a")
+                    .append(" | ")
+                    .append(result.judgeScores() == null
+                            ? "n/a"
+                            : String.format(Locale.ROOT, "%.1f", result.judgeScores().averageScore()))
                     .append(" |\n");
         }
         return sb.toString();

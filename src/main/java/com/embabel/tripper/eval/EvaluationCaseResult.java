@@ -16,6 +16,8 @@ public record EvaluationCaseResult(
         double toolCallSuccessRate,
         long latencyMs,
         double estimatedTokenCostUsd,
-        List<String> issues
+        List<String> issues,
+        // Null when the run used the deterministic (no-judge) tier.
+        JudgeScores judgeScores
 ) {
 }
