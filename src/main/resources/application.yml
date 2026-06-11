@@ -85,7 +85,9 @@ embabel:
       capture-prompt-content: false
       max-summary-characters: 240
       max-runs: 100
-      cost-warning-threshold-usd: 0.15
+      # A normal run costs ~$0.45 (Chinese/Kimi) to ~$0.52 (English/Claude); 0.15 fired every run
+      # and carried no signal. 0.75 leaves headroom and only flags genuine overruns.
+      cost-warning-threshold-usd: 0.75
     safety:
       tools:
         enabled: true
