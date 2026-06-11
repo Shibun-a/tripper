@@ -79,6 +79,10 @@ data class TripperConfig(
     // around $0.45 (Chinese/Kimi) to $0.52 (English/Claude); 0.6 is an honest ceiling. Tune here
     // rather than hardcoding it in the confirmation text.
     val estimatedMaxCostUsd: Double = 0.6,
+    // Model used by the LLM-as-judge in the evaluation harness (see PlanJudgeAgent). Ideally set to
+    // a model DIFFERENT from the planner to reduce self-preference bias; using the strongest model
+    // available matters more than differing, so the default mirrors the planner.
+    val judgeModel: String = "claude-sonnet-4-5",
 )
 
 private const val WEATHER_TOOLS = "weather"
