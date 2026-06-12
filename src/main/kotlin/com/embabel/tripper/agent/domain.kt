@@ -172,6 +172,34 @@ data class Stay(
 }
 
 /**
+ * Ensure every date from start to end has a day, filling gaps with the previous day's
+ * location. Models (especially OpenAI-compatible domestic ones) sometimes omit dates, which
+ * would otherwise trip the verifier's DATE_GAP check and force an avoidable repair pass.
+ */
+internal fun completeDays(
+    days: List<Day>,
+    start: LocalDate,
+    end: LocalDate,
+    fallbackLocation: String,
+): List<Day> {
+    val byDate = days.associateBy { it.date }
+    var lastLocation = days.firstOrNull()?.locationAndCountry?.takeIf { it.isNotBlank() } ?: fallbackLocation
+    val result = mutableListOf<Day>()
+    var cursor = start
+    while (!cursor.isAfter(end)) {
+        val existing = byDate[cursor]
+        if (existing != null && existing.locationAndCountry.isNotBlank()) {
+            lastLocation = existing.locationAndCountry
+            result.add(existing)
+        } else {
+            result.add(Day(cursor, lastLocation))
+        }
+        cursor = cursor.plusDays(1)
+    }
+    return result
+}
+
+/**
  * Group days into stays by consecutive runs of the same city. A plain groupBy on city would
  * merge a return visit (e.g. Paris → Lyon → Paris) into a single stay whose dates span the
  * days spent elsewhere, producing a wrong accommodation search window.

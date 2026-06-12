@@ -59,6 +59,7 @@ class TripperAgent(
     private val contentSafetyService: ContentSafetyService,
     private val planHtmlSanitizer: PlanHtmlSanitizer,
     private val toolSafetyService: ToolSafetyService,
+    private val fallbackPlans: FallbackPlans,
 ) {
 
     private val logger = LoggerFactory.getLogger(TripperAgent::class.java)
@@ -138,21 +139,12 @@ class TripperAgent(
         val maxPois = (tripDays * config.pointsOfInterestPerDay)
             .coerceAtMost(config.maxPointsOfInterest.toLong())
             .toInt()
-        val prompt = """
-                ${toolSafetyService.promptPolicy("findPointsOfInterest", toolNames)}
-
-                ${languageInstruction(travelBrief)}
-
-                Consider the following travel brief for a journey from ${travelBrief.from} to ${travelBrief.to}.
-                ${travelBrief.contribution()}
-                Find at most $maxPois points of interest that are relevant to the travel brief and travelers.
-                Use mapping tools to consider appropriate order and put a rough date
-                range for each point of interest.
-                Consider likely weather
-                
-                Consider this user-provided travel knowledge when relevant:
-                ${knowledgeContext.contribution()}
-            """.trimIndent()
+        val prompt = TripPrompts.findPointsOfInterest(
+            toolPolicy = toolSafetyService.promptPolicy("findPointsOfInterest", toolNames),
+            brief = travelBrief,
+            knowledgeContext = knowledgeContext,
+            maxPois = maxPois,
+        )
         return tracedAction(
             context = context,
             actionName = "findPointsOfInterest",
@@ -219,6 +211,7 @@ class TripperAgent(
                     WEATHER_TOOLS,
                 )
                 .withToolObject(braveImageSearch)
+            val toolPolicy = toolSafetyService.promptPolicy("researchPointsOfInterest", toolNames)
             val researchFailures = AtomicInteger()
             val poiFindings = context.parallelMap(
                 itineraryIdeas.pointsOfInterest,
@@ -226,29 +219,7 @@ class TripperAgent(
             ) { poi ->
                 try {
                     val rpi = promptRunner.create<ResearchedPointOfInterest>(
-                        prompt = """
-                ${toolSafetyService.promptPolicy("researchPointsOfInterest", toolNames)}
-
-                ${languageInstruction(travelBrief)}
-
-                Research the following point of interest.
-                Consider interesting stories about art and culture and famous people.
-                Your audience: ${travelBrief.brief}
-                Dates to consider: ${travelBrief.departureDate} to ${travelBrief.returnDate}
-                If any particularly important events are happening here during this time, mention them
-                and list specific dates.
-                Also consider likely weather.
-                <point-of-interest-to-research>
-                ${poi.name}
-                ${poi.description}
-                ${poi.location}
-                Date: from ${poi.fromDate} to: ${poi.toDate}
-                </point-of-interest-to-research>
-                Use the image search tool to find images of the point of interest.
-                
-                User-provided travel knowledge that may be relevant:
-                ${knowledgeContext.contribution()}
-            """.trimIndent(),
+                        prompt = TripPrompts.researchPointOfInterest(toolPolicy, travelBrief, poi, knowledgeContext),
                     )
                     // Force the correct POI even if the model dropped it from its JSON.
                     rpi.copy(pointOfInterest = poi)
@@ -302,42 +273,8 @@ class TripperAgent(
         // No tools here: the planner only writes from the research already gathered.
         val toolNames = emptyList<String>()
         // Shared, compressed point-of-interest research used by both planner calls.
-        val poiSummary = poiFindings.pointsOfInterest.joinToString("\n\n") { finding ->
-            val research = finding.research.take(config.researchSummaryCharacters)
-            val links = finding.links.take(2).joinToString("; ") { "${it.summary}: ${it.url}" }
-            val images = finding.imageLinks.take(2).joinToString("; ") { it.url }
-            """
-                ${finding.pointOfInterest.name} (${finding.pointOfInterest.location})
-                $research
-                Links: $links
-                Image URLs (embed only these as images): $images
-            """.trimIndent()
-        }
-
-        val structurePrompt = """
-                ${languageInstruction(travelBrief)}
-
-                From the travel brief and researched points of interest below, produce the plan's
-                STRUCTURE ONLY (no prose, no HTML):
-                - a brief, catchy title (no dates)
-                - days: one entry for EVERY date from ${travelBrief.departureDate} to ${travelBrief.returnDate},
-                  each with locationAndCountry in Google Maps friendly Latin form (e.g. Dijon,+France).
-                  Repeat the same location for consecutive days in the same town. Minimize travel time.
-                - imageLinks / videoLinks / pageLinks: ONLY links the researchers provided below
-                - countriesVisited
-
-                <brief>${travelBrief.contribution()}</brief>
-
-                Points of interest:
-                $poiSummary
-            """.trimIndent()
-
-        val htmlPromptPrefix = """
-                ${languageInstruction(travelBrief)}
-
-                Write a detailed, engaging travel itinerary in HTML, ${config.wordCount} words or less.
-                Use exactly this day-by-day route (do not change locations or dates):
-            """.trimIndent()
+        val poiSummary = TripPrompts.poiSummary(poiFindings, config.researchSummaryCharacters)
+        val structurePrompt = TripPrompts.planStructure(travelBrief, poiSummary)
 
         return tracedAction(
             context = context,
@@ -361,7 +298,7 @@ class TripperAgent(
                     "Falling back to deterministic plan structure after planner metadata failure: {}",
                     ex.message,
                 )
-                fallbackPlanMeta(travelBrief, poiFindings)
+                fallbackPlans.planMeta(travelBrief, poiFindings)
             }
             // Guarantee full date coverage in code so a model that omits dates can't trip DATE_GAP.
             val days = completeDays(
@@ -371,29 +308,17 @@ class TripperAgent(
             // Call 2: the long HTML body as plain text (no JSON escaping to get wrong).
             val planHtml = try {
                 runner.withPromptElements(ResponseFormat.HTML).generateText(
-                    """
-                $htmlPromptPrefix
-                ${days.joinToString("\n") { "${it.date}: ${it.locationAndCountry}" }}
-
-                Start headings at <h4>, use paragraphs and unordered lists. Recount at least one
-                interesting story about a famous person associated with an area. Embed images only
-                from the researcher-provided URLs below, max width ${config.imageWidth}px, each with
-                an informative caption and alt text. If user knowledge influences a recommendation,
-                cite it inline using [KB:<citationId>] exactly as provided.
-
-                User-provided travel knowledge:
-                ${knowledgeContext.contribution()}
-
-                Points of interest research:
-                $poiSummary
-                """.trimIndent()
+                    TripPrompts.planHtmlBody(
+                        travelBrief, days, poiSummary, knowledgeContext,
+                        config.wordCount, config.imageWidth,
+                    )
                 )
             } catch (ex: RuntimeException) {
                 logger.warn(
                     "Falling back to deterministic HTML plan after planner text failure: {}",
                     ex.message,
                 )
-                fallbackPlanHtml(travelBrief, days, poiFindings, knowledgeContext)
+                fallbackPlans.planHtml(travelBrief, days, poiFindings, knowledgeContext)
             }
 
             ProposedTravelPlan(
@@ -447,37 +372,11 @@ class TripperAgent(
                 verification.issues.joinToString { "${it.category}:${it.message}" },
             )
 
-            val repairPoiSummary = poiFindings.pointsOfInterest.joinToString("\n") {
-                """
-                ${it.pointOfInterest.name}
-                ${it.research}
-                ${it.links.joinToString { link -> "${link.url}: ${link.summary}" }}
-            """.trimIndent()
-            }
-
             // Context shared by both repair calls. Keeping it identical across the structure and
             // HTML passes ensures they describe the same repaired trip.
-            val repairContext = """
-                ${languageInstruction(travelBrief)}
-
-                The itinerary verifier found blocking issues in the proposed travel plan. Repair it
-                before it is shown to the user. Keep the user's trip intent, travelers, destination,
-                date range and style; preserve still-valid recommendations and citations.
-
-                <brief>${travelBrief.contribution()}</brief>
-
-                User-provided travel knowledge:
-                ${knowledgeContext.contribution()}
-
-                Structured verifier issues:
-                ${verification.contribution()}
-
-                Original days:
-                ${proposedPlan.days.joinToString("\n") { "${it.date}: ${it.locationAndCountry}" }}
-
-                Relevant point-of-interest research:
-                $repairPoiSummary
-            """.trimIndent()
+            val repairContext = TripPrompts.repairContext(
+                travelBrief, knowledgeContext, verification, proposedPlan, poiFindings,
+            )
 
             val runner = config.planner.promptRunner(context)
                 .withLanguageModel(travelBrief, config.cnPlannerModel)
@@ -485,17 +384,7 @@ class TripperAgent(
 
             // Call 1: repaired STRUCTURE only (no HTML inside JSON) — same split as proposeTravelPlan.
             val repairedMeta = runner.create<ProposedTravelPlanMeta>(
-                prompt = """
-                $repairContext
-
-                Produce the repaired plan's STRUCTURE ONLY (no prose, no HTML):
-                - a brief, catchy title (no dates)
-                - days: one entry for EVERY date from ${travelBrief.departureDate} to ${travelBrief.returnDate},
-                  each with a non-empty locationAndCountry in Google Maps friendly Latin form (e.g. Dijon,+France).
-                  Repeat the same location for consecutive days in the same town. Minimize travel time.
-                - imageLinks / videoLinks / pageLinks: drop invalid URLs, keep only valid ones
-                - countriesVisited
-            """.trimIndent()
+                prompt = TripPrompts.repairStructure(repairContext, travelBrief)
             )
             // Guarantee full date coverage in code so a model that omits dates can't re-trip DATE_GAP.
             val repairedDays = completeDays(
@@ -504,19 +393,7 @@ class TripperAgent(
 
             // Call 2: repaired HTML body as plain text (no JSON escaping to get wrong).
             val repairedHtml = runner.withPromptElements(ResponseFormat.HTML).generateText(
-                """
-                $repairContext
-
-                Rewrite the travel itinerary in HTML to fix the issues above, ${config.wordCount} words or less.
-                Use exactly this day-by-day route (do not change locations or dates):
-                ${repairedDays.joinToString("\n") { "${it.date}: ${it.locationAndCountry}" }}
-
-                Start headings at <h4>, use paragraphs and unordered lists. Remove or replace invalid URLs.
-                If user knowledge influences a recommendation, cite it inline using [KB:<citationId>] exactly as provided.
-
-                Original plan to repair (do not restate verbatim):
-                ${proposedPlan.plan}
-            """.trimIndent()
+                TripPrompts.repairHtmlBody(repairContext, repairedDays, proposedPlan, config.wordCount)
             )
 
             val repairedPlan = ProposedTravelPlan(
@@ -714,186 +591,6 @@ class TripperAgent(
             agentRunTraceService.failAction(runId, eventId, ex.message ?: ex::class.simpleName)
             throw ex
         }
-    }
-
-    /**
-     * Instruction so the LLM writes natural-language content in the user's chosen UI language,
-     * while keeping machine-consumed fields (locationAndCountry, place names, URLs) in Latin form
-     * so the verifier coordinate catalog, Airbnb URLs and Google Maps links keep working.
-     */
-    private fun languageInstruction(brief: JourneyTravelBrief): String =
-        """
-        Write all natural-language content (titles, headings, descriptions and prose) in ${brief.language}.
-        IMPORTANT: keep place names and the "locationAndCountry" field in Google Maps friendly Latin form
-        (for example Barcelona,+Spain); do NOT translate location values, URLs or citation ids.
-        """.trimIndent()
-
-    private fun fallbackPlanMeta(
-        brief: JourneyTravelBrief,
-        poiFindings: PointOfInterestFindings,
-    ): ProposedTravelPlanMeta {
-        val days = fallbackJourneyDays(brief, poiFindings)
-        return ProposedTravelPlanMeta(
-            title = if (isChinese(brief)) "${brief.from}至${brief.to}轻松行程" else "${brief.from} to ${brief.to} itinerary",
-            days = days,
-            imageLinks = safeResources(poiFindings.pointsOfInterest.flatMap { it.imageLinks }).take(6),
-            videoLinks = safeResources(poiFindings.pointsOfInterest.flatMap { it.videoLinks }).take(6),
-            pageLinks = safeResources(poiFindings.pointsOfInterest.flatMap { it.links }).take(8),
-            countriesVisited = countriesFrom(days),
-        )
-    }
-
-    private fun fallbackPlanHtml(
-        brief: JourneyTravelBrief,
-        days: List<Day>,
-        poiFindings: PointOfInterestFindings,
-        knowledgeContext: TravelKnowledgeContext,
-    ): String {
-        val dayItems = days.joinToString("\n") {
-            "<li><strong>${it.date}</strong>: ${html(it.locationAndCountry.replace("+", " "))}</li>"
-        }
-        val poiItems = poiFindings.pointsOfInterest.joinToString("\n") {
-            "<li><strong>${html(it.pointOfInterest.name)}</strong>: ${html(it.pointOfInterest.description)}</li>"
-        }
-        val knowledgeNote = if (knowledgeContext.hits.isEmpty()) ""
-        else "<p>${html("Included ${knowledgeContext.hits.size} user knowledge source(s) where relevant.")}</p>"
-
-        return if (isChinese(brief)) {
-            """
-            <h4>${html(brief.from)}至${html(brief.to)}${days.size}天轻松行程</h4>
-            <p>实时长文生成暂时不可用，以下为基于已完成路线结构、旅行需求和可用研究结果生成的保守行程。</p>
-            <h4>每日安排</h4>
-            <ul>
-            $dayItems
-            </ul>
-            <h4>重点体验</h4>
-            <ul>
-            $poiItems
-            </ul>
-            <p>跨城交通以${transportLabelZh(brief.transportPreference)}为主；出发前请再次核对班次、开放时间、天气和当地交通。</p>
-            $knowledgeNote
-            """.trimIndent()
-        } else {
-            """
-            <h4>${html(brief.from)} to ${html(brief.to)} ${days.size}-day relaxed itinerary</h4>
-            <p>Live long-form generation was temporarily unavailable, so this conservative itinerary was assembled from the route, brief, and available research.</p>
-            <h4>Daily route</h4>
-            <ul>
-            $dayItems
-            </ul>
-            <h4>Focus experiences</h4>
-            <ul>
-            $poiItems
-            </ul>
-            <p>Plan intercity travel by ${html(brief.transportPreference)}. Recheck schedules, opening hours, weather, and local transport before departure.</p>
-            $knowledgeNote
-            """.trimIndent()
-        }
-    }
-
-    /**
-     * Derive each fallback day's location from the researched points of interest: their
-     * locations are Latin-form values produced by earlier, successful pipeline steps, so the
-     * fallback stays compatible with the verifier catalog and map links for any route without
-     * a transliteration table. Uncovered dates carry the previous location forward.
-     */
-    private fun fallbackJourneyDays(
-        brief: JourneyTravelBrief,
-        poiFindings: PointOfInterestFindings,
-    ): List<Day> {
-        val pois = poiFindings.pointsOfInterest
-            .map { it.pointOfInterest }
-            .filter { it.location.isNotBlank() }
-            .sortedBy { it.fromDate }
-        if (pois.isEmpty()) {
-            return fallbackJourneyDaysFromBrief(brief)
-        }
-        val result = mutableListOf<Day>()
-        var lastLocation = pois.first().location
-        var cursor = brief.departureDate
-        while (!cursor.isAfter(brief.returnDate)) {
-            val covering = pois.firstOrNull { !cursor.isBefore(it.fromDate) && !cursor.isAfter(it.toDate) }
-            if (covering != null) {
-                lastLocation = covering.location
-            }
-            result.add(Day(cursor, lastLocation))
-            cursor = cursor.plusDays(1)
-        }
-        return result
-    }
-
-    /**
-     * Last resort with no researched POIs at all: split the trip between the user's own
-     * origin and destination wording, normalized to the '+'-separated location form. The
-     * verifier may then report route estimates as unavailable (INFO), which is honest.
-     */
-    private fun fallbackJourneyDaysFromBrief(brief: JourneyTravelBrief): List<Day> {
-        val totalDays = (ChronoUnit.DAYS.between(brief.departureDate, brief.returnDate) + 1).coerceAtLeast(1)
-        val daysAtOrigin = if (totalDays >= 6) 3 else (totalDays / 2).coerceAtLeast(1)
-        val result = mutableListOf<Day>()
-        var cursor = brief.departureDate
-        var index = 0L
-        while (!cursor.isAfter(brief.returnDate)) {
-            val location = if (index < daysAtOrigin) brief.from else brief.to
-            result.add(Day(cursor, location.trim().replace(Regex("\\s+"), "+")))
-            cursor = cursor.plusDays(1)
-            index += 1
-        }
-        return result
-    }
-
-    /** Countries parsed from 'City,+Country' day locations; days without a country part are skipped. */
-    private fun countriesFrom(days: List<Day>): List<String> =
-        days.mapNotNull { day ->
-            day.locationAndCountry
-                .substringAfterLast(',', "")
-                .replace("+", " ")
-                .trim()
-                .ifBlank { null }
-        }.distinct()
-
-    /** The form's transport values are our own closed set, so a fixed label map is safe here. */
-    private fun transportLabelZh(preference: String): String = when (preference.trim().lowercase()) {
-        "driving" -> "自驾"
-        "train" -> "火车"
-        "flying" -> "飞机"
-        "cycling" -> "骑行"
-        else -> preference
-    }
-
-    private fun html(value: String): String =
-        value
-            .replace("&", "&amp;")
-            .replace("<", "&lt;")
-            .replace(">", "&gt;")
-            .replace("\"", "&quot;")
-
-    /**
-     * Ensure every date from start to end has a day, filling gaps with the previous day's
-     * location. Models (especially OpenAI-compatible domestic ones) sometimes omit dates, which
-     * would otherwise trip the verifier's DATE_GAP check and force an avoidable repair pass.
-     */
-    private fun completeDays(
-        days: List<Day>,
-        start: LocalDate,
-        end: LocalDate,
-        fallbackLocation: String,
-    ): List<Day> {
-        val byDate = days.associateBy { it.date }
-        var lastLocation = days.firstOrNull()?.locationAndCountry?.takeIf { it.isNotBlank() } ?: fallbackLocation
-        val result = mutableListOf<Day>()
-        var cursor = start
-        while (!cursor.isAfter(end)) {
-            val existing = byDate[cursor]
-            if (existing != null && existing.locationAndCountry.isNotBlank()) {
-                lastLocation = existing.locationAndCountry
-                result.add(existing)
-            } else {
-                result.add(Day(cursor, lastLocation))
-            }
-            cursor = cursor.plusDays(1)
-        }
-        return result
     }
 
 }
