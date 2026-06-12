@@ -347,8 +347,48 @@ Current behavior:
 Current limitations:
 
 - The edit MVP is deterministic and records scoped edit notes; it does not yet call an LLM to rewrite full itinerary prose.
-- Edited versions are stored in memory and reset when the app restarts.
+- On the default profile edited versions live in memory and reset on restart; the `postgres` profile (below) persists them.
 - Edit-specific cost tracing will become useful once LLM-backed editing is added.
+
+## Durable Persistence (postgres profile)
+
+By default the app keeps every store (run traces, edit sessions, knowledge documents, verifier
+results, vector index) in memory and needs no database. The `postgres` Spring profile swaps in
+JPA-backed stores plus a pgvector-backed vector store, so all of it survives restarts.
+
+1. Start the database (pgvector/pg17 on host port 5433, credentials `tripper`/`tripper`):
+
+   ```bash
+   docker compose up -d postgres
+   ```
+
+2. Run the app with the profile (combine with `gateway` for MCP tools):
+
+   ```bash
+   SPRING_PROFILES_ACTIVE=postgres,gateway ./mvnw -Dmaven.test.skip=true spring-boot:run
+   ```
+
+3. Verify durability: add a document on `/knowledge`, restart the app, and the document is
+   still listed and still retrievable on `/knowledge/debug`.
+
+Schema management is `ddl-auto: update` for now (tables `agent_run_traces`,
+`plan_edit_sessions`, `travel_knowledge_documents`, `plan_verification_results`, plus
+pgvector's `vector_store`); Flyway migrations are the planned production follow-up. The JPA
+adapters are covered by `JpaStoresTest` against embedded H2, so CI needs no Docker.
+
+### Proxy gotcha on macOS
+
+If a system-wide proxy (Clash/V2Ray etc.) is active, the JVM picks up `socksProxyHost` from
+the OS settings and may route even `localhost` JDBC connections into the proxy, failing with
+`java.net.UnknownHostException: localhost`. Bypass it for the forked app JVM:
+
+```bash
+./mvnw -Dmaven.test.skip=true \
+  -Dspring-boot.run.jvmArguments="-DsocksProxyHost= -DsocksNonProxyHosts=localhost|127.*|[::1]" \
+  spring-boot:run
+```
+
+(`curl` smoke tests need `--noproxy '*'` for the same reason.)
 
 ## Useful Files
 
