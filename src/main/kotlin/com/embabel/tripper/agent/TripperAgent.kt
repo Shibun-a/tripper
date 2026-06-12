@@ -16,18 +16,13 @@
 package com.embabel.tripper.agent
 
 import com.embabel.agent.api.annotation.*
-import com.embabel.agent.api.common.Actor
 import com.embabel.agent.api.common.OperationContext
-import com.embabel.agent.api.common.PromptRunner
 import com.embabel.agent.api.common.SomeOf
 import com.embabel.agent.api.common.create
 import com.embabel.agent.core.CoreToolGroups
 import com.embabel.agent.core.last
 import com.embabel.agent.domain.library.InternetResource
 import com.embabel.agent.prompt.ResponseFormat
-import com.embabel.agent.prompt.element.ToolCallControl
-import com.embabel.agent.prompt.persona.Persona
-import com.embabel.agent.prompt.persona.RoleGoalBackstory
 import com.embabel.common.ai.model.LlmOptions
 import com.embabel.common.util.StringTransformer
 import com.embabel.tripper.BraveImageSearchService
@@ -39,57 +34,12 @@ import com.embabel.tripper.safety.ContentSafetyService
 import com.embabel.tripper.safety.PlanHtmlSanitizer
 import com.embabel.tripper.safety.ToolSafetyService
 import com.embabel.tripper.util.ImageChecker
-import com.embabel.tripper.verification.ItineraryDay
-import com.embabel.tripper.verification.ItineraryLink
-import com.embabel.tripper.verification.ItineraryStay
-import com.embabel.tripper.verification.ItineraryVerificationRequest
 import com.embabel.tripper.verification.ItineraryVerificationService
 import org.slf4j.LoggerFactory
-import org.springframework.boot.context.properties.ConfigurationProperties
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicInteger
-
-@ConfigurationProperties("embabel.tripper")
-data class TripperConfig(
-    val wordCount: Int = 700,
-    val imageWidth: Int = 800,
-    val planner: Actor<Persona>,
-    val researcher: Actor<RoleGoalBackstory>,
-    // Cap tool calls per LLM step to bound token cost and latency (each tool result is fed
-    // back into the model context). Override via embabel.tripper.tool-call-control.tool-calls.
-    val toolCallControl: ToolCallControl = ToolCallControl(4),
-    val thinkerLlm: LlmOptions,
-    val maxConcurrency: Int = 12,
-    // Points of interest scale with trip length (pointsOfInterestPerDay * days), since research
-    // fans out one parallel LLM call per POI. maxPointsOfInterest is a hard ceiling so very long
-    // trips cannot blow up cost. Tune both via embabel.tripper.* .
-    val pointsOfInterestPerDay: Int = 2,
-    val maxPointsOfInterest: Int = 10,
-    // Server-side cap on trip length: each day adds POI research fan-out and planner prompt
-    // size, so an oversized date range is a cost (and abuse) concern, not just a UX one.
-    val maxTripDays: Int = 30,
-    // When the user picks Chinese, the agent runs on these domestic (Moonshot/Kimi) models
-    // instead of the overseas defaults above — domestic models are directly reachable (no EOF).
-    val cnThinkerModel: String = "moonshot-v1-128k",
-    // moonshot-v1-128k (non-thinking) for the planner. The plan is generated in two calls — a
-    // short structured metadata object plus a plain-text HTML body — so the model never has to
-    // emit HTML inside JSON (which Moonshot does unreliably) and we avoid k2.5's streaming format.
-    val cnPlannerModel: String = "moonshot-v1-128k",
-    val cnResearcherModel: String = "moonshot-v1-32k",
-    // Per-POI research is summarized (truncated) before it is handed to the planner, so the
-    // proposal prompt stays small — cheaper, faster, less likely to overflow or be ignored.
-    val researchSummaryCharacters: Int = 500,
-    // Rough upper bound shown in the cost-confirmation prompt (USD). Measured end-to-end runs land
-    // around $0.45 (Chinese/Kimi) to $0.52 (English/Claude); 0.6 is an honest ceiling. Tune here
-    // rather than hardcoding it in the confirmation text.
-    val estimatedMaxCostUsd: Double = 0.6,
-    // Model used by the LLM-as-judge in the evaluation harness (see PlanJudgeAgent). Ideally set to
-    // a model DIFFERENT from the planner to reduce self-preference bias; using the strongest model
-    // available matters more than differing, so the default mirrors the planner.
-    val judgeModel: String = "claude-sonnet-4-5",
-)
 
 private const val WEATHER_TOOLS = "weather"
 
@@ -944,51 +894,6 @@ class TripperAgent(
             cursor = cursor.plusDays(1)
         }
         return result
-    }
-
-    private fun isChinese(brief: JourneyTravelBrief): Boolean =
-        brief.language.contains("chinese", ignoreCase = true) || brief.language.contains("中文")
-
-    /** When the user picked Chinese, run this prompt on the configured domestic (Moonshot) model. */
-    private fun PromptRunner.withLanguageModel(brief: JourneyTravelBrief, model: String): PromptRunner =
-        if (isChinese(brief)) withLlm(LlmOptions.withModel(model)) else this
-
-    private fun modelName(options: LlmOptions): String? =
-        options.model ?: options.role ?: options.criteria.toString()
-
-    private fun verificationRequest(
-        brief: JourneyTravelBrief,
-        plan: ProposedTravelPlan,
-        stays: List<Stay>,
-    ): ItineraryVerificationRequest {
-        val pageLinks = plan.pageLinks.map {
-            ItineraryLink("pageLinks", it.url, it.summary)
-        }
-        val imageLinks = plan.imageLinks.map {
-            ItineraryLink("imageLinks", it.url, it.summary)
-        }
-        val videoLinks = plan.videoLinks.map {
-            ItineraryLink("videoLinks", it.url, it.summary)
-        }
-        val stayModels = stays.map { stay ->
-            ItineraryStay(
-                stay.days.map { ItineraryDay(it.date, it.locationAndCountry) },
-                stay.airbnbUrl,
-            )
-        }
-        return ItineraryVerificationRequest(
-            brief.from,
-            brief.to,
-            brief.transportPreference,
-            brief.departureDate,
-            brief.returnDate,
-            brief.dailyBudget,
-            plan.title,
-            plan.plan,
-            plan.days.map { ItineraryDay(it.date, it.locationAndCountry) },
-            pageLinks + imageLinks + videoLinks,
-            stayModels,
-        )
     }
 
 }
