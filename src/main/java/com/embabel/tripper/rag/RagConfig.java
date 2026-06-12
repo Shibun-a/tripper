@@ -4,9 +4,12 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.transformers.TransformersEmbeddingModel;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * Wires the local embedding model and the in-memory vector store used for travel-knowledge RAG.
@@ -32,8 +35,26 @@ public class RagConfig {
      * so it does not pick up the OpenAI {@link EmbeddingModel} beans embabel also registers.
      */
     @Bean
+    @Profile("!postgres")
     public VectorStore travelKnowledgeVectorStore(
             @Qualifier("travelKnowledgeEmbeddingModel") EmbeddingModel embeddingModel) {
         return SimpleVectorStore.builder(embeddingModel).build();
+    }
+
+    /**
+     * Durable vector store on the postgres profile. Built manually (not via the pgvector
+     * starter autoconfiguration) so it stays bound to the local embedding model rather than
+     * whichever {@link EmbeddingModel} autoconfiguration would pick.
+     */
+    @Bean
+    @Profile("postgres")
+    public VectorStore travelKnowledgePgVectorStore(
+            @Qualifier("travelKnowledgeEmbeddingModel") EmbeddingModel embeddingModel,
+            JdbcTemplate jdbcTemplate) {
+        return PgVectorStore.builder(jdbcTemplate, embeddingModel)
+                // all-MiniLM-L6-v2 (and the planned multilingual default) embed at 384 dims.
+                .dimensions(384)
+                .initializeSchema(true)
+                .build();
     }
 }

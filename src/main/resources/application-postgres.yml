@@ -1,0 +1,14 @@
+# Durable tier: start the database with `docker compose up postgres`, then run the app with
+#   SPRING_PROFILES_ACTIVE=postgres,gateway ./mvnw -Dmaven.test.skip=true spring-boot:run
+# Traces, edit sessions, knowledge documents, verifier results and the pgvector chunk index
+# all survive restarts on this profile.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/tripper
+    username: tripper
+    password: tripper
+  jpa:
+    hibernate:
+      # MVP schema management; Flyway migrations are the planned production follow-up.
+      ddl-auto: update
+    open-in-view: false

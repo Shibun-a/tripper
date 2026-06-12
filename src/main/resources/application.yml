@@ -130,3 +130,18 @@ logging:
     com.embabel.agent.config.models.DockerLocalModels: DEBUG
     com.embabel.agent.web.sse.SSEController: INFO
     com.embabel.agent.tools.mcp: DEBUG
+
+---
+# Default tier: zero external dependencies. JPA/datasource auto-configuration only activates
+# on the postgres profile (see application-postgres.yml); otherwise the in-memory stores and
+# the in-memory SimpleVectorStore serve, and the app boots without any database.
+spring:
+  config:
+    activate:
+      on-profile: "!postgres"
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration
