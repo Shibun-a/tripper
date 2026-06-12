@@ -9,5 +9,7 @@ public enum PlanIssueCategory {
     ROUTE_ESTIMATE_UNAVAILABLE,
     BUDGET_EXCEEDED,
     INVALID_LINK,
-    MISSING_STAY
+    MISSING_STAY,
+    /** The verification request itself is unusable (e.g. non-positive budget) — not a plan defect. */
+    INVALID_INPUT
 }

@@ -1,12 +1,19 @@
 package com.embabel.tripper.verification;
 
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -24,43 +31,42 @@ public class ItineraryVerificationService {
             "(?i)(?:\\$|usd\\s*)(\\d{2,5})(?:\\.\\d{1,2})?"
     );
 
-    private static final Map<String, Coordinate> CITY_COORDINATES = Map.ofEntries(
-            Map.entry("barcelona", new Coordinate(41.3874, 2.1686)),
-            Map.entry("bordeaux", new Coordinate(44.8378, -0.5792)),
-            Map.entry("paris", new Coordinate(48.8566, 2.3522)),
-            Map.entry("dijon", new Coordinate(47.3220, 5.0415)),
-            Map.entry("beaune", new Coordinate(47.0260, 4.8400)),
-            Map.entry("lyon", new Coordinate(45.7640, 4.8357)),
-            Map.entry("marseille", new Coordinate(43.2965, 5.3698)),
-            Map.entry("nice", new Coordinate(43.7102, 7.2620)),
-            Map.entry("madrid", new Coordinate(40.4168, -3.7038)),
-            Map.entry("rome", new Coordinate(41.9028, 12.4964)),
-            Map.entry("florence", new Coordinate(43.7696, 11.2558)),
-            Map.entry("venice", new Coordinate(45.4408, 12.3155)),
-            Map.entry("london", new Coordinate(51.5072, -0.1276)),
-            Map.entry("amsterdam", new Coordinate(52.3676, 4.9041)),
-            Map.entry("brussels", new Coordinate(50.8503, 4.3517)),
-            Map.entry("berlin", new Coordinate(52.5200, 13.4050)),
-            Map.entry("munich", new Coordinate(48.1351, 11.5820)),
-            Map.entry("vienna", new Coordinate(48.2082, 16.3738)),
-            Map.entry("prague", new Coordinate(50.0755, 14.4378)),
-            Map.entry("lisbon", new Coordinate(38.7223, -9.1393)),
-            Map.entry("porto", new Coordinate(41.1579, -8.6291)),
-            Map.entry("new york", new Coordinate(40.7128, -74.0060)),
-            Map.entry("san francisco", new Coordinate(37.7749, -122.4194)),
-            Map.entry("los angeles", new Coordinate(34.0522, -118.2437)),
-            Map.entry("tokyo", new Coordinate(35.6762, 139.6503)),
-            Map.entry("kyoto", new Coordinate(35.0116, 135.7681)),
-            Map.entry("osaka", new Coordinate(34.6937, 135.5023)),
-            Map.entry("shanghai", new Coordinate(31.2304, 121.4737)),
-            Map.entry("beijing", new Coordinate(39.9042, 116.4074)),
-            Map.entry("singapore", new Coordinate(1.3521, 103.8198))
-    );
-
     private final PlanVerificationRepository repository;
+    private final Map<String, Coordinate> cityCoordinates;
 
     public ItineraryVerificationService(PlanVerificationRepository repository) {
         this.repository = repository;
+        this.cityCoordinates = loadCityCatalog();
+    }
+
+    /**
+     * City coordinates ship as a classpath resource so route coverage grows by editing data,
+     * not code. Estimates stay deterministic and offline — no geocoding at verification time.
+     */
+    private static Map<String, Coordinate> loadCityCatalog() {
+        Map<String, Coordinate> catalog = new HashMap<>();
+        ClassPathResource resource = new ClassPathResource("verification/city-coordinates.csv");
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                    continue;
+                }
+                String[] parts = trimmed.split(",");
+                if (parts.length != 3) {
+                    throw new IllegalStateException("Bad city catalog line: " + line);
+                }
+                catalog.put(
+                        parts[0].trim().toLowerCase(Locale.ROOT),
+                        new Coordinate(Double.parseDouble(parts[1].trim()), Double.parseDouble(parts[2].trim()))
+                );
+            }
+        } catch (IOException ex) {
+            throw new IllegalStateException("Cannot load verifier city catalog", ex);
+        }
+        return Map.copyOf(catalog);
     }
 
     public PlanVerificationResult verifyProposal(
@@ -251,23 +257,36 @@ public class ItineraryVerificationService {
     ) {
         if (request.dailyBudget() <= 0.0) {
             draft.issue(PlanVerificationIssue.of(
-                    PlanIssueCategory.BUDGET_EXCEEDED,
+                    PlanIssueCategory.INVALID_INPUT,
                     VerificationSeverity.ERROR,
                     "Daily budget must be greater than zero."
             ));
             return;
         }
 
+        // A regex cannot tell a per-day price from a trip total, so tier instead of flagging
+        // everything: amounts beyond the whole-trip budget are real warnings, amounts between
+        // the daily and total budget are likely multi-day figures and only noted as INFO.
+        long tripDays = Math.max(1, ChronoUnit.DAYS.between(request.departureDate(), request.returnDate()) + 1);
+        double totalBudget = request.dailyBudget() * tripDays;
         Matcher matcher = MONEY_PATTERN.matcher(request.planText() == null ? "" : request.planText());
         while (matcher.find()) {
             double amount = Double.parseDouble(matcher.group(1));
-            if (amount > request.dailyBudget()) {
+            if (amount > totalBudget) {
                 draft.issue(PlanVerificationIssue.of(
                         PlanIssueCategory.BUDGET_EXCEEDED,
                         VerificationSeverity.WARNING,
                         "The plan mentions $" + Math.round(amount)
-                                + ", which exceeds the requested daily budget of $"
-                                + Math.round(request.dailyBudget()) + "."
+                                + ", which exceeds the total trip budget of $"
+                                + Math.round(totalBudget) + "."
+                ));
+            } else if (amount > request.dailyBudget()) {
+                draft.issue(PlanVerificationIssue.of(
+                        PlanIssueCategory.BUDGET_EXCEEDED,
+                        VerificationSeverity.INFO,
+                        "The plan mentions $" + Math.round(amount)
+                                + ", above the daily budget of $" + Math.round(request.dailyBudget())
+                                + " but within the trip total; it may be a multi-day figure."
                 ));
             }
         }
@@ -381,7 +400,7 @@ public class ItineraryVerificationService {
     }
 
     private Coordinate coordinateFor(String locationAndCountry) {
-        return CITY_COORDINATES.get(normalizeCity(locationAndCountry));
+        return cityCoordinates.get(normalizeCity(locationAndCountry));
     }
 
     private String normalizeCity(String locationAndCountry) {

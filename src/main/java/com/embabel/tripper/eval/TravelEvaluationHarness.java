@@ -6,6 +6,7 @@ import com.embabel.tripper.verification.ItineraryVerificationService;
 import com.embabel.tripper.verification.PlanIssueCategory;
 import com.embabel.tripper.verification.PlanVerificationIssue;
 import com.embabel.tripper.verification.PlanVerificationResult;
+import com.embabel.tripper.verification.VerificationSeverity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,7 +73,11 @@ public class TravelEvaluationHarness {
                 0
         );
 
-        int budgetViolations = countIssues(verification, PlanIssueCategory.BUDGET_EXCEEDED);
+        // INFO-level budget notes (likely multi-day figures) are not violations.
+        int budgetViolations = (int) verification.getIssues().stream()
+                .filter(issue -> issue.getCategory() == PlanIssueCategory.BUDGET_EXCEEDED)
+                .filter(issue -> issue.getSeverity() != VerificationSeverity.INFO)
+                .count();
         int invalidLinks = countIssues(verification, PlanIssueCategory.INVALID_LINK);
         boolean citationSatisfied = !evalCase.requiresKnowledgeCitation()
                 || candidate.verificationRequest().planText().contains("[KB:");
