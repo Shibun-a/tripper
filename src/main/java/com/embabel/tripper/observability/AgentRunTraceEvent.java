@@ -63,6 +63,19 @@ public final class AgentRunTraceEvent {
         );
     }
 
+    /** Field-for-field copy so repository readers never share a mutable event with writers. */
+    AgentRunTraceEvent copySnapshot() {
+        AgentRunTraceEvent copy = new AgentRunTraceEvent(
+                id, runId, actionName, startedAt, modelName, promptCharacters, toolNames, inputSummary);
+        copy.status = status;
+        copy.completedAt = completedAt;
+        copy.durationMs = durationMs;
+        copy.outputSummary = outputSummary;
+        copy.errorMessage = errorMessage;
+        copy.completionCharacters = completionCharacters;
+        return copy;
+    }
+
     public void complete(
             String outputSummary,
             Integer completionCharacters

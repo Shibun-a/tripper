@@ -59,7 +59,6 @@ public class AgentRunTraceService {
         if (!properties.isEnabled()) {
             return "";
         }
-        AgentRunTrace trace = ensureRun(runId);
         AgentRunTraceEvent event = AgentRunTraceEvent.started(
                 runId,
                 sanitize(actionName),
@@ -68,8 +67,7 @@ public class AgentRunTraceService {
                 toolNames == null ? List.of() : toolNames.stream().map(this::sanitize).toList(),
                 sanitize(inputSummary)
         );
-        trace.addEvent(event);
-        repository.save(trace);
+        repository.appendEvent(runId, event);
         return event.getId();
     }
 
@@ -82,11 +80,7 @@ public class AgentRunTraceService {
         if (!properties.isEnabled() || eventId == null || eventId.isBlank()) {
             return;
         }
-        repository.findByRunId(runId)
-                .flatMap(trace -> trace.getEvents().stream()
-                        .filter(event -> event.getId().equals(eventId))
-                        .findFirst())
-                .ifPresent(event -> event.complete(sanitize(outputSummary), completionCharacters));
+        repository.completeEvent(runId, eventId, sanitize(outputSummary), completionCharacters);
     }
 
     public void failAction(
@@ -97,11 +91,7 @@ public class AgentRunTraceService {
         if (!properties.isEnabled() || eventId == null || eventId.isBlank()) {
             return;
         }
-        repository.findByRunId(runId)
-                .flatMap(trace -> trace.getEvents().stream()
-                        .filter(event -> event.getId().equals(eventId))
-                        .findFirst())
-                .ifPresent(event -> event.fail(sanitize(errorMessage)));
+        repository.failEvent(runId, eventId, sanitize(errorMessage));
     }
 
     public void completeRun(
@@ -115,8 +105,8 @@ public class AgentRunTraceService {
         if (!properties.isEnabled()) {
             return;
         }
-        AgentRunTrace trace = ensureRun(runId);
-        trace.complete(
+        repository.completeRun(
+                runId,
                 status,
                 costUsd,
                 promptTokens,
@@ -124,7 +114,6 @@ public class AgentRunTraceService {
                 modelsUsed == null ? List.of() : modelsUsed.stream().map(this::sanitize).toList(),
                 warningsFor(costUsd)
         );
-        repository.save(trace);
     }
 
     public Optional<AgentRunTrace> findTrace(String runId) {
@@ -133,18 +122,6 @@ public class AgentRunTraceService {
 
     public List<AgentRunTrace> findRecent() {
         return repository.findRecent();
-    }
-
-    private AgentRunTrace ensureRun(String runId) {
-        return repository.findByRunId(runId)
-                .orElseGet(() -> createRun(
-                        runId,
-                        "Unregistered agent run",
-                        "unknown",
-                        "unknown",
-                        0.0,
-                        "trace started from agent action"
-                ));
     }
 
     private List<String> warningsFor(Double costUsd) {

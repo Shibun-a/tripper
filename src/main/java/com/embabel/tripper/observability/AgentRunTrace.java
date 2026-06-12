@@ -42,12 +42,51 @@ public final class AgentRunTrace {
         this.createdAt = Instant.now();
     }
 
-    public void addEvent(AgentRunTraceEvent event) {
+    private AgentRunTrace(AgentRunTrace source) {
+        this.runId = source.runId;
+        this.createdAt = source.createdAt;
+        this.title = source.title;
+        this.fromLocation = source.fromLocation;
+        this.toLocation = source.toLocation;
+        this.dailyBudget = source.dailyBudget;
+        this.inputSummary = source.inputSummary;
+        source.events.forEach(event -> this.events.add(event.copySnapshot()));
+        this.warnings.addAll(source.warnings);
+        this.status = source.status;
+        this.completedAt = source.completedAt;
+        this.totalDurationMs = source.totalDurationMs;
+        this.costUsd = source.costUsd;
+        this.promptTokens = source.promptTokens;
+        this.completionTokens = source.completionTokens;
+        this.modelsUsed = source.modelsUsed;
+    }
+
+    /** Placeholder for events arriving before the web layer registered the run. */
+    static AgentRunTrace unregistered(String runId) {
+        return new AgentRunTrace(
+                runId,
+                "Unregistered agent run",
+                "unknown",
+                "unknown",
+                0.0,
+                "trace started from agent action"
+        );
+    }
+
+    /**
+     * Deep copy for readers. Live traces are mutated under the repository lock while agent
+     * actions run; handing out copies keeps render-time iteration safe without sharing the lock.
+     */
+    AgentRunTrace snapshot() {
+        return new AgentRunTrace(this);
+    }
+
+    void addEvent(AgentRunTraceEvent event) {
         events.add(event);
         events.sort(Comparator.comparing(AgentRunTraceEvent::getStartedAt));
     }
 
-    public void complete(
+    void complete(
             AgentRunStatus status,
             Double costUsd,
             Integer promptTokens,
