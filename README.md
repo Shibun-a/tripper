@@ -1,285 +1,158 @@
-# Tripper: Embabel Travel Planner Agent
+# TripSmith — Production-Oriented AI Travel Planning Agent
 
-![Build](https://github.com/embabel/embabel-agent/actions/workflows/maven.yml/badge.svg)
+![Build](https://github.com/Shibun-a/tripper/actions/workflows/maven.yml/badge.svg)
+![Kotlin](https://img.shields.io/badge/kotlin-%237F52FF.svg?style=flat&logo=kotlin&logoColor=white)
+![Java](https://img.shields.io/badge/java%2021-ED8B00?style=flat&logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/spring%20boot-%236DB33F.svg?style=flat&logo=spring&logoColor=white)
+![Postgres](https://img.shields.io/badge/pgvector-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=flat&logo=docker&logoColor=white)
 
-<div >
+TripSmith turns a travel brief ("Barcelona to Bordeaux, 10 days, two travelers, $200/day")
+into a verified, day-by-day itinerary. A multi-step LLM agent researches points of interest
+with real tools (web search, maps, weather, image search), grounds its plan in the user's own
+travel documents (RAG), then runs the result through a **deterministic verifier with an LLM
+repair loop** before anything reaches the user. Every run is traced, costed, sanitized and —
+on the `postgres` profile — durable.
 
-![Kotlin](https://img.shields.io/badge/kotlin-%237F52FF.svg?style=for-the-badge&logo=kotlin&logoColor=white)
-![Spring](https://img.shields.io/badge/spring-%236DB33F.svg?style=for-the-badge&logo=spring&logoColor=white)
-![Apache Tomcat](https://img.shields.io/badge/apache%20tomcat-%23F8DC75.svg?style=for-the-badge&logo=apache-tomcat&logoColor=black)
-![Apache Maven](https://img.shields.io/badge/Apache%20Maven-C71A36?style=for-the-badge&logo=Apache%20Maven&logoColor=white)
-![ChatGPT](https://img.shields.io/badge/chatGPT-74aa9c?style=for-the-badge&logo=openai&logoColor=white)
-![JSON](https://img.shields.io/badge/JSON-000?style=for-the-badge&logo=json&logoColor=fff)
-![htmx](https://img.shields.io/badge/htmx-3366CC.svg?style=for-the-badge&logo=htmx&logoColor=white)
-![GitHub Actions](https://img.shields.io/badge/github%20actions-%232671E5.svg?style=for-the-badge&logo=githubactions&logoColor=white)
-![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
-![IntelliJ IDEA](https://img.shields.io/badge/IntelliJIDEA-000000.svg?style=for-the-badge&logo=intellij-idea&logoColor=white)
+The interesting part is not the demo; it is the engineering around it: evaluation, guardrails,
+observability, cost control, graceful degradation and persistence. See
+[PROJECT-NOTE.md](PROJECT-NOTE.md) for an honest map of what is original here versus what
+came from the upstream example this project started from.
 
-</div>
+## Architecture
 
----
+```mermaid
+flowchart TB
+    subgraph Pipeline["Agent pipeline (TripperAgent — Embabel @Action flow)"]
+        direction LR
+        A[Travel brief\n+ validation] --> B[Retrieve\nknowledge]
+        B --> C[Find POIs\nweb/maps/weather]
+        C --> D[Research each POI\nparallel, bounded]
+        D --> E[Propose plan\nstructure + HTML split]
+        E --> F{Verifier}
+        F -- errors --> G[LLM repair\none shot] --> F
+        F -- pass --> H[Stays +\npost-process]
+    end
 
-<table>
-<tr>
-<td width="200">
-<img src="https://github.com/embabel/embabel-agent/blob/main/embabel-agent-api/images/315px-Meister_der_Weltenchronik_001.jpg?raw=true" width="180" alt="Embabel Agent">
-</td>
-<td>
+    subgraph Subsystems["Java subsystems"]
+        RAG[rag: multilingual ONNX\nembeddings + vector store]
+        VER[verification: date/route/\nbudget/link/stay checks]
+        EVAL[eval: deterministic tier\n+ agent tier + LLM judge]
+        OBS[observability: /runs traces,\ncost + latency capture]
+        SAFE[safety: injection detection,\nHTML whitelist, SSRF guard]
+        EDIT[editing: versioned sessions,\ndiffs, verifier reruns]
+    end
 
-**Tripper** is a travel planning agent that helps you create personalized travel itineraries,
-based on your preferences and interests. It uses web search, mapping and integrates with Airbnb.
-It demonstrates the power of the [Embabel agent framework](https://www.github.com/embabel/embabel-agent).
+    subgraph Stores["Store ports"]
+        MEM[(in-memory\ndefault)]
+        PG[(Postgres + pgvector\npostgres profile)]
+    end
 
-**Key Features:**
-
-- 🤖 Demonstrates Embabel's core concepts of deterministic planning and centering agents around a domain model
-- 🌍 Illustrates the use of multiple LLMs (Claude Sonnet, GPT-4.1-mini) in the same application
-- 🗺️ Extensive use of MCP tools for mapping, image and web search, wikipedia and Airbnb integration
-- 📱 Modern web interface with htmx
-- 🐳 Docker containerization for MCP tools
-- 🚀 CI/CD with GitHub Actions
-
-</td>
-</tr>
-</table>
-
-## Portfolio Extension Note
-
-This fork starts from the open-source Embabel Tripper project. The current goal is to turn the baseline demo into a stronger AI application portfolio project by adding reproducibility, architecture documentation, tests, Java-owned RAG, itinerary verification, evaluation, and observability features.
-
-Current personal implementation includes a Java travel knowledge base MVP, a Java itinerary verifier with a one-shot Agent repair loop, a deterministic travel-agent evaluation harness, Java-owned AgentOps run tracing, Java-owned guardrails, and a Java-owned plan editing/versioning MVP.
-
-Personal extension docs:
-
-- [Project Note](PROJECT-NOTE.md)
-- [Local Development Guide](LOCAL-DEVELOPMENT.md)
-- [Architecture Guide](infra.md)
-- [AI Application Plan](README-AI-APPLICATION-PLAN.md)
-
-## 🚀 Quick Start
-
-> Warning: Tripper is a genuinely useful travel planner. But be aware that its extensive LLM usage will cost money. A
-> typical run costs around $0.10c.
-
-### Prerequisites
-
-- Java 21+
-- Docker Desktop, if you want MCP tools or Docker-based local services
-- Maven is optional. This repository includes Maven Wrapper, so use `./mvnw`.
-- Docker Model Runner is only needed if you use the Docker Model Runner compose file:
-  ```bash
-  docker desktop enable model-runner --tcp=12434
-  ```
-
-### Environment Setup
-
-1. **Configure API Keys**
-   ```bash
-   export OPENAI_API_KEY=your_openai_api_key_here
-   # Set your Brave API key for image search
-   export BRAVE_API_KEY=your_brave_api_key_here
-   ```
-
-   For a homepage-only smoke test, non-empty dummy values are enough. A real planning run requires valid keys.
-
-   ```bash
-   export OPENAI_API_KEY=dummy
-   export BRAVE_API_KEY=dummy
-   export GOOGLE_CLIENT_ID=dummy
-   export GOOGLE_CLIENT_SECRET=dummy
-   ```
-
-2. **Set MCP Environment variables** for MCP tools running in Docker
-   ```bash
-   # Copy the example environment file
-   cp mcp.env.example .mcp.env
-   
-   # Edit mcp.env with your configuration
-   nano .mcp.env
-   ```
-
-### Running the Application
-
-1. **Start Background Services** (optional, needed for MCP tool-backed runs)
-   ```bash
-   docker compose up mcp-gateway zipkin
-   ```
-
-2. **Launch the Travel Planner**
-
-   **Option A: Using Shell Script**
-   ```bash
-   ./run.sh
-   ```
-
-   **Option B: Using Maven Wrapper**
-   ```bash
-   ./mvnw -Dmaven.test.skip=true spring-boot:run
-   ```
-
-   **Option C: Using IDE**
-    - Open the project in your IDE
-    - Run it in the way your IDE runs Spring Boot apps. In IntelliJ IDEA, simply run the main method in
-      `TripperApplication.kt`.
-
-3. **Access the Application**
-    - Travel Planner: [http://localhost:8747/](http://localhost:8747/)
-    - Platform Info: [http://localhost:8747/platform](http://localhost:8747/platform)
-
-### Running the Application with Docker
-
-1. **Launch the Travel Planner**
-   ```bash
-   docker compose --profile in-docker up --build
-   ```
-
-2. **Access the Application**
-    - Travel Planner: [http://localhost:8747/](http://localhost:8747/)
-    - Platform Info: [http://localhost:8747/platform](http://localhost:8747/platform)
-
-> Note that the default port is `8747` not the usual Java `8080`. This is because
-> we often run multiple Embabel servers at once and don't want them to conflict.
-> The specific port is a reference to an [iconic aircraft](https://en.wikipedia.org/wiki/Boeing_747).
-> It's easy to change the port in `application.yml`.
-
-### Setup OAuth Credentials
-
-Enable security by changing the following line in `application.yml`:
-
-```properties
-embabel.security.enabled=true
+    B --- RAG
+    F --- VER
+    H --- SAFE
+    Pipeline --- OBS
+    OBS & EDIT & RAG & VER --- Stores
 ```
 
-Then follow these steps to set up Google OAuth:
+| Package (`io.github.shibuna.tripsmith`) | Responsibility | Origin |
+|---|---|---|
+| `agent` | Orchestration, prompts, fallbacks, tracing decorator, model routing | upstream skeleton, rebuilt + decomposed |
+| `rag` | Knowledge base: chunking, multilingual embeddings, retrieval, citations | original |
+| `verification` | Deterministic itinerary verifier + repair-loop input | original |
+| `eval` | Two-tier evaluation harness, 30-case dataset, LLM judge | original |
+| `observability` | Per-run action timelines, cost/tokens/latency, `/runs` UI | original |
+| `safety` | Prompt-injection detection, HTML whitelist sanitization, SSRF guard, redaction | original |
+| `editing` | Versioned plan-edit sessions with diffs and verifier reruns | original |
+| `web`, `web.support` | Controllers, form validation, processing flow | upstream baseline, extended |
 
-1. Get Google OAuth credentials from [Google Cloud Console](https://console.cloud.google.com/)
-2. Add redirect URI: `http://localhost:8747/login/oauth2/code/google`
-3. Set your `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` environment variables:
-   ```bash
-   export GOOGLE_CLIENT_ID=your_google_client_id_here
-   export GOOGLE_CLIENT_SECRET=your_google_client_secret_here
-   ```
+## Engineering Highlights
 
-For more details, see the [Security Guide](README-SECURITY.md).
+**Reliability — never trust the model.** Every plan passes a deterministic verifier (full
+date coverage, haversine route estimates from a [data-file city catalog](src/main/resources/verification/city-coordinates.csv),
+tiered budget checks, link and stay checks). Blocking errors trigger one structured LLM
+repair pass, re-verified. If a planner call still fails after retries, the run degrades to a
+deterministic fallback plan assembled from already-validated research instead of erroring —
+and date gaps are closed in code (`completeDays`) so models that drop dates cannot break
+plans.
 
-## 📸 Screenshots
+**Cost engineering — measured, not vibes.** Tool calls are capped per action (default 4),
+per-POI research is truncated to 500 characters before planning, POI count scales with trip
+length under a hard ceiling, and the plan is generated as a small JSON structure plus a
+plain-text HTML body so weak-JSON models never emit HTML inside JSON. A measured end-to-end
+run costs **$0.45 (Chinese/Kimi) to $0.52 (English/Claude)**; the web flow validates input
+server-side *before* any model call spends money.
 
-<div align="center">
+**Safety — both directions.** Retrieved web/knowledge content is treated as untrusted:
+injection patterns are detected, suspicious instruction lines stripped, and tool policies
+injected per action. On the output side the LLM's HTML goes through a jsoup whitelist (the
+page renders it raw, so this is the XSS boundary), URL imports are SSRF-guarded
+(public-unicast-only hosts, no redirects, size caps), and traces redact secrets.
 
-### Itinerary Input
+**Evaluation — two honest tiers.** A deterministic tier runs in CI against a 30-case dataset
+and regression-tests the verifier and metrics pipeline (date coverage, budget violations,
+invalid links, citation coverage, latency/cost accounting). A gated agent tier
+(`EVAL_AGENT=true`) runs the real agent end to end and scores plans with a separate LLM-judge
+agent on relevance, theme coverage, route sanity, constraint adherence and prose quality.
 
-<img src="images/input1.jpg" alt="Travel Planner Input Interface" width="600"/>
+**Persistence — ports and adapters.** Traces, edit sessions, knowledge documents and
+verifier results sit behind store interfaces: in-memory adapters by default (zero
+dependencies), JPA adapters plus a pgvector index on the `postgres` profile. Verified: data
+and vector retrieval survive restarts.
 
-*Input form for travel preferences*
+**Multilingual.** Chinese-language briefs route to domestic models (Moonshot) end to end, and
+the RAG embedding default is a multilingual model — a Chinese synonym query retrieves the
+right Chinese document at 0.76 similarity where the previous English-only model scored noise.
 
-### Generated Itinerary
+## Quick Start
 
-<img src="images/output1.jpg" alt="Travel Planner Output" width="600"/>
+> A real planning run uses paid LLM and tool APIs (~$0.5/run). The homepage and knowledge
+> pages work with dummy keys.
 
-*AI-generated travel itinerary with detailed recommendations*
+```bash
+# 1. Keys (dummy values are enough for a UI smoke test)
+export OPENAI_API_KEY=... BRAVE_API_KEY=...
+export GOOGLE_CLIENT_ID=dummy GOOGLE_CLIENT_SECRET=dummy
 
-### Link to Interactive Map
+# 2. MCP tools + tracing (optional, needed for real runs)
+cp mcp.env.example .mcp.env   # add brave/google-maps keys
+docker compose up -d mcp-gateway zipkin
 
-<img src="images/map.jpg" alt="Interactive map" width="600"/>
+# 3. Run (in-memory tier)
+./mvnw -Dmaven.test.skip=true spring-boot:run
+# → http://localhost:8747  (knowledge base: /knowledge, run traces: /runs)
 
-*Map link included in output*
-
-### Link to Airbnb
-
-<img src="images/airbnb.jpg" alt="Airbnb" width="600"/>
-
-*Airbnb links for each stay of the trip*
-
-### Plan and Usage Information
-
-<img src="images/plan.jpg" alt="Plan and usage" width="600"/>
-
-*Information about plan and usage, including total cost*
-
-### Event Stream
-
-<img src="images/process.jpg" alt="Events" width="600"/>
-
-*Emits events about process flow*
-
-</div>
-
-## 🏗️ Architecture
-
-The Tripper agent follows a modern microservices architecture:
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Spring Boot/  │    │      LLMs       │
-│   (htmx)        │◄──►│ Embabel Backend │◄──►│ (Claude,GPT 4)  │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌─────────────────┐
-                       │   Docker        │
-                       │   MCP tools     │
-                       └─────────────────┘
-```
-
-**Components:**
-
-- **Frontend**: Modern web interface built with htmx for seamless interactions
-- **Backend**: Kotlin-based Spring Boot application handling business logic. Key flow is defined in `TripperAgent.kt`.
-- **LLMs**: Illustrates use of multiple LLMs
-- **Containerization**: Docker for consistent deployment across environments and MCP tool management
-
-## 🛠️ Development
-
-### Tech Stack
-
-- **Backend**: Kotlin, Embabel, Spring Boot, Apache Tomcat
-- **Frontend**: htmx, JSON APIs
-- **Build**: Apache Maven Wrapper
-- **DevOps**: Docker, GitHub Actions
-
-### Note For Linux Developers
-
-- Ensure proper software version: Docker Desktop 4.43.1
-- Linux Docker Desktop does not support yet Model Runner in GUI. Please
-  follow [Model Runner Documentation](https://docs.docker.com/ai/model-runner/)
-- Validation step:
-
- ```bash
-   docker model pull  jimclark106/all-minilm:23M-F16
+# Durable tier: Postgres + pgvector
+docker compose up -d postgres
+SPRING_PROFILES_ACTIVE=postgres,gateway ./mvnw -Dmaven.test.skip=true spring-boot:run
 ```
 
-* Thereafter below *compose* would not be required (due to temparary lack of support on Linux):
+Evaluation:
 
- ```bash
-   docker compose --file compose.dmr.yaml up
+```bash
+# Deterministic tier (offline, free)
+./mvnw -q -DskipTests compile exec:java -Dexec.mainClass=io.github.shibuna.tripsmith.eval.TravelEvaluationCli
+
+# Agent tier (real LLM + tools + judge; costs money)
+EVAL_AGENT=true ./mvnw test -Dtest=AgentEvaluationIT
 ```
 
-### Contributing
+Reports land in `target/evals/` as JSON and Markdown. Full setup details, the demo request
+script and a macOS proxy gotcha are in [LOCAL-DEVELOPMENT.md](LOCAL-DEVELOPMENT.md);
+architecture and file responsibilities in [infra.md](infra.md); the staged roadmap in
+[README-AI-APPLICATION-PLAN.md](README-AI-APPLICATION-PLAN.md).
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+## Tech
 
-## 📝 License
+Kotlin + Java 21, Spring Boot 3.5, [Embabel Agent Framework](https://github.com/embabel/embabel-agent)
+(GOAP-planned `@Action` agents, MCP tools), Spring AI (local ONNX embeddings, pgvector),
+PostgreSQL + pgvector, jsoup, htmx + Thymeleaf, Docker Compose, GitHub Actions.
 
-This project is licensed under the Apache License - see the [LICENSE](LICENSE) file for details.
+## Attribution & License
 
-## 🤝 Support
-
-For questions, issues, or contributions, please visit our [GitHub repository](https://github.com/embabel/embabel-agent)
-or open an issue.
-
-## Contributors
-
-[![Embabel contributors](https://contrib.rocks/image?repo=embabel/tripper)](https://github.com/embabel/tripper/graphs/contributors)
-
-
----
-
-<div align="center">
-
-(c) Embabel 2025
-
-[🌐 Website](https://embabel.com) • [📧 Contact](mailto:info@embabel.com) • [🐦 Twitter](https://twitter.com/springrod)
+TripSmith is built on the [Embabel Agent Framework](https://github.com/embabel/embabel-agent)
+and started from the open-source [Embabel Tripper](https://github.com/embabel/tripper)
+example application — the agent skeleton, domain model, tool wiring and htmx UI came from
+there, and upstream-derived files keep their Apache license headers. Everything described
+under "original" in [PROJECT-NOTE.md](PROJECT-NOTE.md) was built on top. Licensed under the
+[Apache License 2.0](LICENSE); see [NOTICE](NOTICE).
