@@ -67,6 +67,9 @@ data class TripperConfig(
     // trips cannot blow up cost. Tune both via embabel.tripper.* .
     val pointsOfInterestPerDay: Int = 2,
     val maxPointsOfInterest: Int = 10,
+    // Server-side cap on trip length: each day adds POI research fan-out and planner prompt
+    // size, so an oversized date range is a cost (and abuse) concern, not just a UX one.
+    val maxTripDays: Int = 30,
     // When the user picks Chinese, the agent runs on these domestic (Moonshot/Kimi) models
     // instead of the overseas defaults above — domestic models are directly reachable (no EOF).
     val cnThinkerModel: String = "moonshot-v1-128k",

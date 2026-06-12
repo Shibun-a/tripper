@@ -23,11 +23,14 @@ import com.embabel.agent.web.htmx.GenericProcessingValues
 import com.embabel.tripper.agent.JourneyTravelBrief
 import com.embabel.tripper.agent.Traveler
 import com.embabel.tripper.agent.Travelers
+import com.embabel.tripper.agent.TripperConfig
 import com.embabel.tripper.observability.AgentRunTraceService
+import org.springframework.context.MessageSource
 import org.springframework.context.i18n.LocaleContextHolder
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.stereotype.Controller
 import org.springframework.ui.Model
+import org.springframework.validation.BindingResult
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.ModelAttribute
 import org.springframework.web.bind.annotation.PostMapping
@@ -40,7 +43,21 @@ import java.time.Period
 class JourneyHtmxController(
     private val agentPlatform: AgentPlatform,
     private val agentRunTraceService: AgentRunTraceService,
+    config: TripperConfig,
+    messageSource: MessageSource,
 ) {
+
+    companion object {
+        private const val MAX_TRAVELERS = 8
+        private const val MAX_BRIEF_CHARACTERS = 4000
+    }
+
+    private val validator = JourneyPlanFormValidator(
+        maxTripDays = config.maxTripDays,
+        maxTravelers = MAX_TRAVELERS,
+        maxBriefCharacters = MAX_BRIEF_CHARACTERS,
+        messageSource = messageSource,
+    )
 
     data class JourneyPlanForm(
         val from: String = "Barcelona",
@@ -74,9 +91,17 @@ class JourneyHtmxController(
 
     @PostMapping("/plan")
     fun planJourney(
-        @ModelAttribute form: JourneyPlanForm,
+        @ModelAttribute("travelBrief") form: JourneyPlanForm,
+        bindingResult: BindingResult,
         model: Model
     ): String {
+        // Reject bad input before an agent process exists: a run spends real money.
+        val formErrors = validator.validate(form, bindingResult.hasErrors(), LocaleContextHolder.getLocale())
+        if (formErrors.isNotEmpty()) {
+            model.addAttribute("travelBrief", form)
+            model.addAttribute("formErrors", formErrors)
+            return "journey-form"
+        }
         // Write the generated plan in the language the user selected in the UI.
         val language = if (LocaleContextHolder.getLocale().language == "zh") "Chinese (Simplified)" else "English"
         val travelBrief = JourneyTravelBrief(

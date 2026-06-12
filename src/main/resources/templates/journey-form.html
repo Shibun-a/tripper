@@ -11,6 +11,13 @@
         |
         <a href="/knowledge/debug" th:text="#{nav.retrievalDebug}">Retrieval debug</a>
     </p>
+    <div th:if="${formErrors != null and !formErrors.isEmpty()}"
+         style="border: 1px solid #c0392b; background: #fdecea; color: #7b241c; padding: 0.75rem 1rem; margin-bottom: 1rem; border-radius: 4px;">
+        <p style="margin: 0 0 0.5rem 0;"><strong th:text="#{form.errors.heading}">Please fix the following before planning:</strong></p>
+        <ul style="margin: 0;">
+            <li th:each="err : ${formErrors}" th:text="${err}">error</li>
+        </ul>
+    </div>
     <form action="/travel/journey/plan" method="post" th:object="${travelBrief}">
         <div class="form-row" style="grid-template-columns: 1fr 1fr 1fr;">
             <div class="form-group">
