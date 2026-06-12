@@ -63,6 +63,34 @@ public final class AgentRunTraceEvent {
         );
     }
 
+    /** Full-state restore used by persistence adapters when rehydrating a stored trace. */
+    static AgentRunTraceEvent restore(
+            String id,
+            String runId,
+            String actionName,
+            Instant startedAt,
+            String modelName,
+            Integer promptCharacters,
+            List<String> toolNames,
+            String inputSummary,
+            AgentRunEventStatus status,
+            Instant completedAt,
+            Long durationMs,
+            String outputSummary,
+            String errorMessage,
+            Integer completionCharacters
+    ) {
+        AgentRunTraceEvent event = new AgentRunTraceEvent(
+                id, runId, actionName, startedAt, modelName, promptCharacters, toolNames, inputSummary);
+        event.status = status;
+        event.completedAt = completedAt;
+        event.durationMs = durationMs;
+        event.outputSummary = outputSummary;
+        event.errorMessage = errorMessage;
+        event.completionCharacters = completionCharacters;
+        return event;
+    }
+
     /** Field-for-field copy so repository readers never share a mutable event with writers. */
     AgentRunTraceEvent copySnapshot() {
         AgentRunTraceEvent copy = new AgentRunTraceEvent(

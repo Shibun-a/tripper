@@ -30,6 +30,23 @@ public final class PlanEditSession {
             double dailyBudget,
             String constraintsSummary
     ) {
+        this(runId, title, fromLocation, toLocation, transportPreference,
+                departureDate, returnDate, dailyBudget, constraintsSummary, Instant.now());
+    }
+
+    /** Full-state restore used by persistence adapters when rehydrating a stored session. */
+    PlanEditSession(
+            String runId,
+            String title,
+            String fromLocation,
+            String toLocation,
+            String transportPreference,
+            LocalDate departureDate,
+            LocalDate returnDate,
+            double dailyBudget,
+            String constraintsSummary,
+            Instant createdAt
+    ) {
         this.runId = runId;
         this.title = title;
         this.fromLocation = fromLocation;
@@ -39,7 +56,7 @@ public final class PlanEditSession {
         this.returnDate = returnDate;
         this.dailyBudget = dailyBudget;
         this.constraintsSummary = constraintsSummary;
-        this.createdAt = Instant.now();
+        this.createdAt = createdAt;
     }
 
     public void addVersion(PlanEditVersion version) {

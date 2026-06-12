@@ -61,6 +61,43 @@ public final class AgentRunTrace {
         this.modelsUsed = source.modelsUsed;
     }
 
+    /** Full-state restore used by persistence adapters when rehydrating a stored trace. */
+    AgentRunTrace(
+            String runId,
+            Instant createdAt,
+            String title,
+            String fromLocation,
+            String toLocation,
+            double dailyBudget,
+            String inputSummary,
+            List<AgentRunTraceEvent> events,
+            List<String> warnings,
+            AgentRunStatus status,
+            Instant completedAt,
+            Long totalDurationMs,
+            Double costUsd,
+            Integer promptTokens,
+            Integer completionTokens,
+            List<String> modelsUsed
+    ) {
+        this.runId = runId;
+        this.createdAt = createdAt;
+        this.title = title;
+        this.fromLocation = fromLocation;
+        this.toLocation = toLocation;
+        this.dailyBudget = dailyBudget;
+        this.inputSummary = inputSummary;
+        this.events.addAll(events == null ? List.of() : events);
+        this.warnings.addAll(warnings == null ? List.of() : warnings);
+        this.status = status;
+        this.completedAt = completedAt;
+        this.totalDurationMs = totalDurationMs;
+        this.costUsd = costUsd;
+        this.promptTokens = promptTokens;
+        this.completionTokens = completionTokens;
+        this.modelsUsed = modelsUsed == null ? List.of() : List.copyOf(modelsUsed);
+    }
+
     /** Placeholder for events arriving before the web layer registered the run. */
     static AgentRunTrace unregistered(String runId) {
         return new AgentRunTrace(
