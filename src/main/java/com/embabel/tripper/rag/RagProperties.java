@@ -30,6 +30,20 @@ public class RagProperties {
      */
     private int maxUrlImportBytes = 2_000_000;
 
+    /**
+     * ONNX embedding model for chunk and query embeddings. The default is multilingual (50+
+     * languages including Chinese) because the app explicitly supports Chinese briefs and
+     * knowledge documents; the earlier all-MiniLM-L6-v2 default embedded English only. Both
+     * models are 384-dimensional, matching the pgvector schema. ~470MB one-time download,
+     * cached locally afterwards.
+     */
+    private String embeddingModelUri =
+            "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/main/onnx/model.onnx";
+
+    /** Fast-tokenizer definition matching {@link #embeddingModelUri}. */
+    private String embeddingTokenizerUri =
+            "https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2/resolve/main/tokenizer.json";
+
     public int getChunkSizeWords() {
         return chunkSizeWords;
     }
@@ -68,5 +82,21 @@ public class RagProperties {
 
     public void setMaxUrlImportBytes(int maxUrlImportBytes) {
         this.maxUrlImportBytes = maxUrlImportBytes;
+    }
+
+    public String getEmbeddingModelUri() {
+        return embeddingModelUri;
+    }
+
+    public void setEmbeddingModelUri(String embeddingModelUri) {
+        this.embeddingModelUri = embeddingModelUri;
+    }
+
+    public String getEmbeddingTokenizerUri() {
+        return embeddingTokenizerUri;
+    }
+
+    public void setEmbeddingTokenizerUri(String embeddingTokenizerUri) {
+        this.embeddingTokenizerUri = embeddingTokenizerUri;
     }
 }

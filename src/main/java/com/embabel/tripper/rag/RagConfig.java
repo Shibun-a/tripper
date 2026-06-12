@@ -21,13 +21,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class RagConfig {
 
     /**
-     * Local ONNX embedding model (all-MiniLM-L6-v2 by default). Runs on CPU, offline after a
-     * one-time model download — no cross-border API calls. {@code afterPropertiesSet()} loads
-     * the model automatically when Spring creates the bean.
+     * Local ONNX embedding model (multilingual paraphrase-MiniLM by default, see
+     * {@link RagProperties#getEmbeddingModelUri()}). Runs on CPU, offline after a one-time
+     * model download — no cross-border API calls. {@code afterPropertiesSet()} loads the
+     * model automatically when Spring creates the bean.
      */
     @Bean
-    public TransformersEmbeddingModel travelKnowledgeEmbeddingModel() {
-        return new TransformersEmbeddingModel();
+    public TransformersEmbeddingModel travelKnowledgeEmbeddingModel(RagProperties properties) {
+        TransformersEmbeddingModel embeddingModel = new TransformersEmbeddingModel();
+        embeddingModel.setModelResource(properties.getEmbeddingModelUri());
+        embeddingModel.setTokenizerResource(properties.getEmbeddingTokenizerUri());
+        return embeddingModel;
     }
 
     /**
