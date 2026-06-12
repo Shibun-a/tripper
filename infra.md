@@ -58,7 +58,7 @@ flowchart TD
 
 主要文件：
 
-- `src/main/kotlin/com/embabel/tripper/web/JourneyHtmxController.kt`
+- `src/main/kotlin/io/github/shibuna/tripsmith/web/JourneyHtmxController.kt`
 - `src/main/kotlin/com/embabel/agent/web/htmx/ProcessStatusController.kt`
 - `src/main/resources/templates/**`
 - `src/main/resources/static/css/**`
@@ -74,8 +74,8 @@ flowchart TD
 
 主要文件：
 
-- `src/main/kotlin/com/embabel/tripper/TripperApplication.kt`
-- `src/main/kotlin/com/embabel/tripper/agent/TripperAgent.kt`
+- `src/main/kotlin/io/github/shibuna/tripsmith/TripperApplication.kt`
+- `src/main/kotlin/io/github/shibuna/tripsmith/agent/TripperAgent.kt`
 
 ### 3.3 Domain Layer
 
@@ -87,7 +87,7 @@ flowchart TD
 
 主要文件：
 
-- `src/main/kotlin/com/embabel/tripper/agent/domain.kt`
+- `src/main/kotlin/io/github/shibuna/tripsmith/agent/domain.kt`
 
 ### 3.4 Tool Integration Layer
 
@@ -100,8 +100,8 @@ flowchart TD
 
 主要文件：
 
-- `src/main/kotlin/com/embabel/tripper/Brave.kt`
-- `src/main/kotlin/com/embabel/tripper/config/ToolsConfig.kt`
+- `src/main/kotlin/io/github/shibuna/tripsmith/Brave.kt`
+- `src/main/kotlin/io/github/shibuna/tripsmith/config/ToolsConfig.kt`
 - `compose.yaml`
 - `compose.dmr.yaml`
 - `compose.ollama.yaml`
@@ -150,7 +150,7 @@ flowchart TD
 
 主要文件：
 
-- `src/main/java/com/embabel/tripper/observability/**`
+- `src/main/java/io/github/shibuna/tripsmith/observability/**`
 - `src/main/resources/templates/runs.html`
 - `src/main/resources/templates/run-detail.html`
 
@@ -166,7 +166,7 @@ flowchart TD
 
 主要文件：
 
-- `src/main/java/com/embabel/tripper/safety/**`
+- `src/main/java/io/github/shibuna/tripsmith/safety/**`
 
 ### 3.9 Plan Editing Layer
 
@@ -180,7 +180,7 @@ flowchart TD
 
 主要文件：
 
-- `src/main/java/com/embabel/tripper/editing/**`
+- `src/main/java/io/github/shibuna/tripsmith/editing/**`
 - `src/main/resources/templates/plan-edit.html`
 
 ### 3.10 Test Layer
@@ -194,13 +194,13 @@ flowchart TD
 主要文件：
 
 - `src/test/kotlin/com/embabel/example/travel/agent/TravelPlanTest.kt`
-- `src/test/java/com/embabel/tripper/rag/TravelKnowledgeServiceTest.java`
-- `src/test/java/com/embabel/tripper/verification/ItineraryVerificationServiceTest.java`
-- `src/test/java/com/embabel/tripper/eval/TravelEvaluationHarnessTest.java`
-- `src/test/java/com/embabel/tripper/observability/AgentRunTraceServiceTest.java`
-- `src/test/java/com/embabel/tripper/safety/ContentSafetyServiceTest.java`
-- `src/test/java/com/embabel/tripper/safety/ToolSafetyServiceTest.java`
-- `src/test/java/com/embabel/tripper/editing/PlanEditingServiceTest.java`
+- `src/test/java/io/github/shibuna/tripsmith/rag/TravelKnowledgeServiceTest.java`
+- `src/test/java/io/github/shibuna/tripsmith/verification/ItineraryVerificationServiceTest.java`
+- `src/test/java/io/github/shibuna/tripsmith/eval/TravelEvaluationHarnessTest.java`
+- `src/test/java/io/github/shibuna/tripsmith/observability/AgentRunTraceServiceTest.java`
+- `src/test/java/io/github/shibuna/tripsmith/safety/ContentSafetyServiceTest.java`
+- `src/test/java/io/github/shibuna/tripsmith/safety/ToolSafetyServiceTest.java`
+- `src/test/java/io/github/shibuna/tripsmith/editing/PlanEditingServiceTest.java`
 
 ## 4. 核心运行链路
 
@@ -267,7 +267,7 @@ flowchart TD
 ```text
 .
 ├── src/main/kotlin
-│   ├── com/embabel/tripper
+│   ├── io/github/shibuna/tripsmith
 │   │   ├── agent
 │   │   ├── config
 │   │   ├── util
@@ -276,7 +276,7 @@ flowchart TD
 │       ├── htmx
 │       └── security
 ├── src/main/java
-│   └── com/embabel/tripper
+│   └── io/github/shibuna/tripsmith
 │       ├── editing
 │       ├── eval
 │       ├── observability
@@ -297,11 +297,11 @@ flowchart TD
 └── pom.xml
 ```
 
-### 5.1 `src/main/kotlin/com/embabel/tripper`
+### 5.1 `src/main/kotlin/io/github/shibuna/tripsmith`
 
 项目业务主包，包含应用入口、Agent、领域模型、外部服务和 Web Controller。
 
-### 5.1.1 `src/main/java/com/embabel/tripper`
+### 5.1.1 `src/main/java/io/github/shibuna/tripsmith`
 
 个人新增 Java 主包。当前 Phase 1 RAG MVP 放在这里，包括知识库领域对象、内存索引、检索服务和知识库管理 Controller。
 
@@ -358,112 +358,112 @@ GitHub Actions CI 配置目录。
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main/kotlin/com/embabel/tripper/TripperApplication.kt` | Spring Boot 入口。启用配置属性扫描和 Embabel Agent 扫描，并配置 Docker Desktop MCP server 类型。 |
+| `src/main/kotlin/io/github/shibuna/tripsmith/TripperApplication.kt` | Spring Boot 入口。启用配置属性扫描和 Embabel Agent 扫描，并配置 Docker Desktop MCP server 类型。 |
 
 ### 6.3 Agent 和领域模型文件
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main/kotlin/com/embabel/tripper/agent/TripperAgent.kt` | 项目核心 Agent。定义旅行规划 action，包括成本确认、兴趣点发现、兴趣点调研、计划生成、校验/修复、住宿搜索和 HTML 后处理。 |
-| `src/main/kotlin/com/embabel/tripper/agent/domain.kt` | 旅行领域模型。定义 `JourneyTravelBrief`、`Travelers`、`PointOfInterest`、`ItineraryIdeas`、`ResearchedPointOfInterest`、`ProposedTravelPlan`、`Stay`、`TravelPlan` 等数据结构；最终 `TravelPlan` 持有知识库上下文和校验结果。 |
+| `src/main/kotlin/io/github/shibuna/tripsmith/agent/TripperAgent.kt` | 项目核心 Agent。定义旅行规划 action，包括成本确认、兴趣点发现、兴趣点调研、计划生成、校验/修复、住宿搜索和 HTML 后处理。 |
+| `src/main/kotlin/io/github/shibuna/tripsmith/agent/domain.kt` | 旅行领域模型。定义 `JourneyTravelBrief`、`Travelers`、`PointOfInterest`、`ItineraryIdeas`、`ResearchedPointOfInterest`、`ProposedTravelPlan`、`Stay`、`TravelPlan` 等数据结构；最终 `TravelPlan` 持有知识库上下文和校验结果。 |
 
 ### 6.3.1 Java RAG 文件
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main/java/com/embabel/tripper/rag/TravelKnowledgeSourceType.java` | 知识来源类型枚举，包括粘贴文本、上传文件和 URL。 |
-| `src/main/java/com/embabel/tripper/rag/TravelKnowledgeDocument.java` | 用户导入的知识文档模型。 |
-| `src/main/java/com/embabel/tripper/rag/TravelKnowledgeHit.java` | 检索命中的 chunk 结果，包含分数、来源、citation id、安全评估和面向 prompt 的脱敏文本。 |
-| `src/main/java/com/embabel/tripper/rag/TravelKnowledgeContext.java` | 可注入 Agent prompt 的知识上下文，实现 `PromptContributor`；明确把知识源标记为不可信上下文。 |
-| `src/main/java/com/embabel/tripper/rag/IndexedTravelKnowledgeChunk.java` | 内部索引 chunk 模型，保存 chunk 文本和 term vector。 |
-| `src/main/java/com/embabel/tripper/rag/TravelKnowledgeRepository.java` | 内存知识库 repository，保存文档和 chunk。 |
-| `src/main/java/com/embabel/tripper/rag/TravelKnowledgeService.java` | Java RAG 核心服务，负责导入、HTML 转文本、切 chunk、term-vector 检索和构造知识上下文。 |
-| `src/main/java/com/embabel/tripper/web/TravelKnowledgeController.java` | Java Controller，提供 `/knowledge` 管理页和 `/knowledge/debug` 检索调试页。 |
+| `src/main/java/io/github/shibuna/tripsmith/rag/TravelKnowledgeSourceType.java` | 知识来源类型枚举，包括粘贴文本、上传文件和 URL。 |
+| `src/main/java/io/github/shibuna/tripsmith/rag/TravelKnowledgeDocument.java` | 用户导入的知识文档模型。 |
+| `src/main/java/io/github/shibuna/tripsmith/rag/TravelKnowledgeHit.java` | 检索命中的 chunk 结果，包含分数、来源、citation id、安全评估和面向 prompt 的脱敏文本。 |
+| `src/main/java/io/github/shibuna/tripsmith/rag/TravelKnowledgeContext.java` | 可注入 Agent prompt 的知识上下文，实现 `PromptContributor`；明确把知识源标记为不可信上下文。 |
+| `src/main/java/io/github/shibuna/tripsmith/rag/IndexedTravelKnowledgeChunk.java` | 内部索引 chunk 模型，保存 chunk 文本和 term vector。 |
+| `src/main/java/io/github/shibuna/tripsmith/rag/TravelKnowledgeRepository.java` | 内存知识库 repository，保存文档和 chunk。 |
+| `src/main/java/io/github/shibuna/tripsmith/rag/TravelKnowledgeService.java` | Java RAG 核心服务，负责导入、HTML 转文本、切 chunk、term-vector 检索和构造知识上下文。 |
+| `src/main/java/io/github/shibuna/tripsmith/web/TravelKnowledgeController.java` | Java Controller，提供 `/knowledge` 管理页和 `/knowledge/debug` 检索调试页。 |
 
 ### 6.3.2 Java 行程校验文件
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main/java/com/embabel/tripper/verification/VerificationSeverity.java` | 校验问题严重级别枚举：`INFO`、`WARNING`、`ERROR`。 |
-| `src/main/java/com/embabel/tripper/verification/PlanIssueCategory.java` | 校验问题分类枚举，包括日期、路线、预算、链接和住宿问题。 |
-| `src/main/java/com/embabel/tripper/verification/ItineraryDay.java` | Java verifier 的每日行程输入 DTO，避免 Java 编译期依赖 Kotlin domain。 |
-| `src/main/java/com/embabel/tripper/verification/ItineraryLink.java` | Java verifier 的链接输入 DTO，标记链接来源字段和 URL。 |
-| `src/main/java/com/embabel/tripper/verification/ItineraryStay.java` | Java verifier 的住宿输入 DTO，保存住宿覆盖日期和住宿链接。 |
-| `src/main/java/com/embabel/tripper/verification/ItineraryVerificationRequest.java` | Java verifier 的统一输入请求，承载 brief、plan、days、links 和 stays。 |
-| `src/main/java/com/embabel/tripper/verification/PlanVerificationIssue.java` | 单个结构化校验问题，包含类别、级别、日期、地点、消息和修复提示详情。 |
-| `src/main/java/com/embabel/tripper/verification/TravelLegEstimate.java` | 相邻地点之间的路线估算结果，包含距离、耗时、估算方法和是否过长。 |
-| `src/main/java/com/embabel/tripper/verification/PlanVerificationResult.java` | 一次行程校验结果，实现 `PromptContributor`，可直接作为 repair prompt 的结构化上下文。 |
-| `src/main/java/com/embabel/tripper/verification/PlanVerificationRepository.java` | 内存校验结果 repository，保存最近 planning run 的校验输出。 |
-| `src/main/java/com/embabel/tripper/verification/ItineraryVerificationService.java` | Java 校验核心服务，负责日期覆盖、地点、路线估算、预算、URL、住宿覆盖等确定性校验。 |
+| `src/main/java/io/github/shibuna/tripsmith/verification/VerificationSeverity.java` | 校验问题严重级别枚举：`INFO`、`WARNING`、`ERROR`。 |
+| `src/main/java/io/github/shibuna/tripsmith/verification/PlanIssueCategory.java` | 校验问题分类枚举，包括日期、路线、预算、链接和住宿问题。 |
+| `src/main/java/io/github/shibuna/tripsmith/verification/ItineraryDay.java` | Java verifier 的每日行程输入 DTO，避免 Java 编译期依赖 Kotlin domain。 |
+| `src/main/java/io/github/shibuna/tripsmith/verification/ItineraryLink.java` | Java verifier 的链接输入 DTO，标记链接来源字段和 URL。 |
+| `src/main/java/io/github/shibuna/tripsmith/verification/ItineraryStay.java` | Java verifier 的住宿输入 DTO，保存住宿覆盖日期和住宿链接。 |
+| `src/main/java/io/github/shibuna/tripsmith/verification/ItineraryVerificationRequest.java` | Java verifier 的统一输入请求，承载 brief、plan、days、links 和 stays。 |
+| `src/main/java/io/github/shibuna/tripsmith/verification/PlanVerificationIssue.java` | 单个结构化校验问题，包含类别、级别、日期、地点、消息和修复提示详情。 |
+| `src/main/java/io/github/shibuna/tripsmith/verification/TravelLegEstimate.java` | 相邻地点之间的路线估算结果，包含距离、耗时、估算方法和是否过长。 |
+| `src/main/java/io/github/shibuna/tripsmith/verification/PlanVerificationResult.java` | 一次行程校验结果，实现 `PromptContributor`，可直接作为 repair prompt 的结构化上下文。 |
+| `src/main/java/io/github/shibuna/tripsmith/verification/PlanVerificationRepository.java` | 内存校验结果 repository，保存最近 planning run 的校验输出。 |
+| `src/main/java/io/github/shibuna/tripsmith/verification/ItineraryVerificationService.java` | Java 校验核心服务，负责日期覆盖、地点、路线估算、预算、URL、住宿覆盖等确定性校验。 |
 
 ### 6.3.3 Java 评测文件
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main/java/com/embabel/tripper/eval/TravelEvalCase.java` | 单条旅行评测用例模型，包含 brief、日期、预算、旅客、约束、兴趣、预期国家和主题。 |
-| `src/main/java/com/embabel/tripper/eval/TravelEvalDataset.java` | 从 `evals/travel-eval-cases.json` 加载评测用例。 |
-| `src/main/java/com/embabel/tripper/eval/EvalPlanCandidate.java` | 单次 planner 输出候选结果，承载 verifier 请求、模拟 latency、token cost 和 tool-call 统计。 |
-| `src/main/java/com/embabel/tripper/eval/EvalPlanCandidateFactory.java` | 评测候选计划生成接口，后续可替换为真实 Agent-backed runner。 |
-| `src/main/java/com/embabel/tripper/eval/DeterministicEvalPlanCandidateFactory.java` | 离线确定性候选计划生成器，用于本地和 CI 稳定评测。 |
-| `src/main/java/com/embabel/tripper/eval/EvaluationCaseResult.java` | 单条评测结果，保存状态、覆盖率、校验问题、citation、tool-call 和成本指标。 |
-| `src/main/java/com/embabel/tripper/eval/EvaluationMetrics.java` | 聚合评测指标，包括日期覆盖率、预算/链接问题率、citation 覆盖、tool-call 成功率、平均 latency、成本和 verifier 问题数。 |
-| `src/main/java/com/embabel/tripper/eval/EvaluationReport.java` | 评测报告模型，并生成 Markdown 汇总。 |
-| `src/main/java/com/embabel/tripper/eval/TravelEvaluationHarness.java` | 评测核心流程：选择数据集子集、生成候选计划、调用行程校验器、聚合指标。 |
-| `src/main/java/com/embabel/tripper/eval/TravelEvaluationReportWriter.java` | 将评测报告写为 JSON 和 Markdown 文件。 |
-| `src/main/java/com/embabel/tripper/eval/TravelEvaluationCli.java` | 命令行入口，支持指定数据集、输出目录和 limit。 |
+| `src/main/java/io/github/shibuna/tripsmith/eval/TravelEvalCase.java` | 单条旅行评测用例模型，包含 brief、日期、预算、旅客、约束、兴趣、预期国家和主题。 |
+| `src/main/java/io/github/shibuna/tripsmith/eval/TravelEvalDataset.java` | 从 `evals/travel-eval-cases.json` 加载评测用例。 |
+| `src/main/java/io/github/shibuna/tripsmith/eval/EvalPlanCandidate.java` | 单次 planner 输出候选结果，承载 verifier 请求、模拟 latency、token cost 和 tool-call 统计。 |
+| `src/main/java/io/github/shibuna/tripsmith/eval/EvalPlanCandidateFactory.java` | 评测候选计划生成接口，后续可替换为真实 Agent-backed runner。 |
+| `src/main/java/io/github/shibuna/tripsmith/eval/DeterministicEvalPlanCandidateFactory.java` | 离线确定性候选计划生成器，用于本地和 CI 稳定评测。 |
+| `src/main/java/io/github/shibuna/tripsmith/eval/EvaluationCaseResult.java` | 单条评测结果，保存状态、覆盖率、校验问题、citation、tool-call 和成本指标。 |
+| `src/main/java/io/github/shibuna/tripsmith/eval/EvaluationMetrics.java` | 聚合评测指标，包括日期覆盖率、预算/链接问题率、citation 覆盖、tool-call 成功率、平均 latency、成本和 verifier 问题数。 |
+| `src/main/java/io/github/shibuna/tripsmith/eval/EvaluationReport.java` | 评测报告模型，并生成 Markdown 汇总。 |
+| `src/main/java/io/github/shibuna/tripsmith/eval/TravelEvaluationHarness.java` | 评测核心流程：选择数据集子集、生成候选计划、调用行程校验器、聚合指标。 |
+| `src/main/java/io/github/shibuna/tripsmith/eval/TravelEvaluationReportWriter.java` | 将评测报告写为 JSON 和 Markdown 文件。 |
+| `src/main/java/io/github/shibuna/tripsmith/eval/TravelEvaluationCli.java` | 命令行入口，支持指定数据集、输出目录和 limit。 |
 
 ### 6.3.4 Java 可观测性文件
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main/java/com/embabel/tripper/observability/AgentRunStatus.java` | Agent run 生命周期状态枚举：`RUNNING`、`COMPLETED`、`FAILED`、`TERMINATED`。 |
-| `src/main/java/com/embabel/tripper/observability/AgentRunEventStatus.java` | 单个 action trace event 状态枚举：`STARTED`、`COMPLETED`、`FAILED`。 |
-| `src/main/java/com/embabel/tripper/observability/AgentRunObservabilityProperties.java` | Phase 4 配置属性，控制开关、摘要长度、保留 run 数、prompt 正文捕获和成本预警阈值。 |
-| `src/main/java/com/embabel/tripper/observability/AgentRunTraceEvent.java` | 单个 action 时间线事件，保存 action 名、状态、耗时、模型、工具组、prompt/output 字符数、摘要和错误。 |
-| `src/main/java/com/embabel/tripper/observability/AgentRunTrace.java` | 单次 Agent run trace，保存 route、预算、最终 cost/token/model 使用、warnings 和 action timeline。 |
-| `src/main/java/com/embabel/tripper/observability/AgentRunTraceRepository.java` | 内存 trace repository，保存最近 run 并按配置裁剪数量。 |
-| `src/main/java/com/embabel/tripper/observability/AgentRunTraceService.java` | 可观测性核心服务，负责创建 run、记录 action start/complete/fail、补最终 usage/cost 和生成成本预警。 |
-| `src/main/java/com/embabel/tripper/observability/AgentRunTraceController.java` | `/runs` 和 `/runs/{id}` 页面 Controller。 |
+| `src/main/java/io/github/shibuna/tripsmith/observability/AgentRunStatus.java` | Agent run 生命周期状态枚举：`RUNNING`、`COMPLETED`、`FAILED`、`TERMINATED`。 |
+| `src/main/java/io/github/shibuna/tripsmith/observability/AgentRunEventStatus.java` | 单个 action trace event 状态枚举：`STARTED`、`COMPLETED`、`FAILED`。 |
+| `src/main/java/io/github/shibuna/tripsmith/observability/AgentRunObservabilityProperties.java` | Phase 4 配置属性，控制开关、摘要长度、保留 run 数、prompt 正文捕获和成本预警阈值。 |
+| `src/main/java/io/github/shibuna/tripsmith/observability/AgentRunTraceEvent.java` | 单个 action 时间线事件，保存 action 名、状态、耗时、模型、工具组、prompt/output 字符数、摘要和错误。 |
+| `src/main/java/io/github/shibuna/tripsmith/observability/AgentRunTrace.java` | 单次 Agent run trace，保存 route、预算、最终 cost/token/model 使用、warnings 和 action timeline。 |
+| `src/main/java/io/github/shibuna/tripsmith/observability/AgentRunTraceRepository.java` | 内存 trace repository，保存最近 run 并按配置裁剪数量。 |
+| `src/main/java/io/github/shibuna/tripsmith/observability/AgentRunTraceService.java` | 可观测性核心服务，负责创建 run、记录 action start/complete/fail、补最终 usage/cost 和生成成本预警。 |
+| `src/main/java/io/github/shibuna/tripsmith/observability/AgentRunTraceController.java` | `/runs` 和 `/runs/{id}` 页面 Controller。 |
 
 ### 6.3.5 Java 安全和 Guardrails 文件
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main/java/com/embabel/tripper/safety/SafetyRiskLevel.java` | 安全风险等级枚举：`NONE`、`LOW`、`MEDIUM`、`HIGH`。 |
-| `src/main/java/com/embabel/tripper/safety/SafetyFindingCategory.java` | 安全问题分类枚举，包括 prompt injection、工具滥用请求、敏感信息暴露和 unsafe link。 |
-| `src/main/java/com/embabel/tripper/safety/SafetyFinding.java` | 单条安全发现，记录类别、风险等级和说明。 |
-| `src/main/java/com/embabel/tripper/safety/SafetyAssessment.java` | 针对一段不可信内容的安全评估结果，包含最高风险等级和 findings 汇总。 |
-| `src/main/java/com/embabel/tripper/safety/SensitiveDataRedactor.java` | 敏感信息脱敏服务，覆盖常见 API key、token、secret、password、bearer token、OpenAI/GitHub token 和 email。 |
-| `src/main/java/com/embabel/tripper/safety/ContentSafetyService.java` | 内容安全核心服务，负责 prompt-injection 检测、不可信文本 prompt 化、HTML 链接过滤和 URL 安全判断。 |
-| `src/main/java/com/embabel/tripper/safety/ToolSafetyProperties.java` | 工具安全配置属性，定义单 action 工具预算和高风险工具组。 |
-| `src/main/java/com/embabel/tripper/safety/ToolSafetyService.java` | 生成 Agent prompt 中的工具安全策略，并识别需要确认的高风险工具组。 |
+| `src/main/java/io/github/shibuna/tripsmith/safety/SafetyRiskLevel.java` | 安全风险等级枚举：`NONE`、`LOW`、`MEDIUM`、`HIGH`。 |
+| `src/main/java/io/github/shibuna/tripsmith/safety/SafetyFindingCategory.java` | 安全问题分类枚举，包括 prompt injection、工具滥用请求、敏感信息暴露和 unsafe link。 |
+| `src/main/java/io/github/shibuna/tripsmith/safety/SafetyFinding.java` | 单条安全发现，记录类别、风险等级和说明。 |
+| `src/main/java/io/github/shibuna/tripsmith/safety/SafetyAssessment.java` | 针对一段不可信内容的安全评估结果，包含最高风险等级和 findings 汇总。 |
+| `src/main/java/io/github/shibuna/tripsmith/safety/SensitiveDataRedactor.java` | 敏感信息脱敏服务，覆盖常见 API key、token、secret、password、bearer token、OpenAI/GitHub token 和 email。 |
+| `src/main/java/io/github/shibuna/tripsmith/safety/ContentSafetyService.java` | 内容安全核心服务，负责 prompt-injection 检测、不可信文本 prompt 化、HTML 链接过滤和 URL 安全判断。 |
+| `src/main/java/io/github/shibuna/tripsmith/safety/ToolSafetyProperties.java` | 工具安全配置属性，定义单 action 工具预算和高风险工具组。 |
+| `src/main/java/io/github/shibuna/tripsmith/safety/ToolSafetyService.java` | 生成 Agent prompt 中的工具安全策略，并识别需要确认的高风险工具组。 |
 
 ### 6.3.6 Java 计划编辑文件
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main/java/com/embabel/tripper/editing/EditableItineraryDay.java` | 可编辑计划中的每日行程 DTO，保存日期、地点和编辑备注。 |
-| `src/main/java/com/embabel/tripper/editing/PlanEditChange.java` | 单条 day-level diff，记录日期、编辑前内容和编辑后内容。 |
-| `src/main/java/com/embabel/tripper/editing/PlanEditDiff.java` | 单次编辑 diff 汇总，包含摘要和变更列表。 |
-| `src/main/java/com/embabel/tripper/editing/PlanEditVersion.java` | 计划版本模型，保存版本号、编辑指令、HTML、days、diff 和 verifier 结果。 |
-| `src/main/java/com/embabel/tripper/editing/PlanEditSession.java` | 单个 planning process 的编辑会话，保存原始约束和全部版本。 |
-| `src/main/java/com/embabel/tripper/editing/PlanEditingRepository.java` | 内存编辑会话 repository。 |
-| `src/main/java/com/embabel/tripper/editing/PlanEditingService.java` | 计划编辑核心服务，负责创建 session、应用全局/单日编辑、生成 diff 并重跑 verifier。 |
-| `src/main/java/com/embabel/tripper/editing/PlanEditController.java` | `/plans/{runId}/edit` 编辑页面 Controller。 |
+| `src/main/java/io/github/shibuna/tripsmith/editing/EditableItineraryDay.java` | 可编辑计划中的每日行程 DTO，保存日期、地点和编辑备注。 |
+| `src/main/java/io/github/shibuna/tripsmith/editing/PlanEditChange.java` | 单条 day-level diff，记录日期、编辑前内容和编辑后内容。 |
+| `src/main/java/io/github/shibuna/tripsmith/editing/PlanEditDiff.java` | 单次编辑 diff 汇总，包含摘要和变更列表。 |
+| `src/main/java/io/github/shibuna/tripsmith/editing/PlanEditVersion.java` | 计划版本模型，保存版本号、编辑指令、HTML、days、diff 和 verifier 结果。 |
+| `src/main/java/io/github/shibuna/tripsmith/editing/PlanEditSession.java` | 单个 planning process 的编辑会话，保存原始约束和全部版本。 |
+| `src/main/java/io/github/shibuna/tripsmith/editing/PlanEditingRepository.java` | 内存编辑会话 repository。 |
+| `src/main/java/io/github/shibuna/tripsmith/editing/PlanEditingService.java` | 计划编辑核心服务，负责创建 session、应用全局/单日编辑、生成 diff 并重跑 verifier。 |
+| `src/main/java/io/github/shibuna/tripsmith/editing/PlanEditController.java` | `/plans/{runId}/edit` 编辑页面 Controller。 |
 
 ### 6.4 外部工具和配置文件
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main/kotlin/com/embabel/tripper/Brave.kt` | Brave Search 集成。封装 web/news/image/video search service，其中 `BraveImageSearchService.searchImages()` 作为 Agent 可调用工具。 |
-| `src/main/kotlin/com/embabel/tripper/config/ToolsConfig.kt` | Spring 配置。创建 `RestClient`，并把 MCP Airbnb 工具过滤注册成 Embabel `ToolGroup`。 |
-| `src/main/kotlin/com/embabel/tripper/util/ImageChecker.kt` | HTML 图片链接校验器。扫描 `<img>` 标签，通过 HTTP HEAD 检查图片链接是否有效，并移除无效图片。 |
+| `src/main/kotlin/io/github/shibuna/tripsmith/Brave.kt` | Brave Search 集成。封装 web/news/image/video search service，其中 `BraveImageSearchService.searchImages()` 作为 Agent 可调用工具。 |
+| `src/main/kotlin/io/github/shibuna/tripsmith/config/ToolsConfig.kt` | Spring 配置。创建 `RestClient`，并把 MCP Airbnb 工具过滤注册成 Embabel `ToolGroup`。 |
+| `src/main/kotlin/io/github/shibuna/tripsmith/util/ImageChecker.kt` | HTML 图片链接校验器。扫描 `<img>` 标签，通过 HTTP HEAD 检查图片链接是否有效，并移除无效图片。 |
 
 ### 6.5 Web Controller 文件
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main/kotlin/com/embabel/tripper/web/JourneyHtmxController.kt` | 旅行规划主 Controller。负责展示表单、接收提交、转换表单到领域对象、创建并启动 AgentProcess。 |
+| `src/main/kotlin/io/github/shibuna/tripsmith/web/JourneyHtmxController.kt` | 旅行规划主 Controller。负责展示表单、接收提交、转换表单到领域对象、创建并启动 AgentProcess。 |
 | `src/main/kotlin/com/embabel/agent/web/htmx/GenericProcessingValues.kt` | 通用 processing 页面模型对象。把 process id、页面标题、详情、结果 key 和成功视图写入 Spring `Model`。 |
 | `src/main/kotlin/com/embabel/agent/web/htmx/PlatformController.kt` | `/platform` 页面 Controller，返回平台信息页面模板。 |
 | `src/main/kotlin/com/embabel/agent/web/htmx/ProcessStatusController.kt` | AgentProcess 状态 Controller。根据 process 状态返回处理中、成功结果或错误页面。 |
@@ -516,13 +516,13 @@ GitHub Actions CI 配置目录。
 | 文件 | 职责 |
 | --- | --- |
 | `src/test/kotlin/com/embabel/example/travel/agent/TravelPlanTest.kt` | Travel plan 相关测试占位。当前构造了 `ProposedTravelPlan`，但没有实际断言，需要后续补强。 |
-| `src/test/java/com/embabel/tripper/rag/TravelKnowledgeServiceTest.java` | Java RAG 服务测试，验证文档导入、检索、citation 和 prompt context。 |
-| `src/test/java/com/embabel/tripper/verification/ItineraryVerificationServiceTest.java` | Java 行程校验测试，覆盖日期缺口、缺失地点、预算、链接、路线和住宿覆盖检查。 |
-| `src/test/java/com/embabel/tripper/eval/TravelEvaluationHarnessTest.java` | Java 评测 harness 测试，覆盖数据集规模/维度、CI 子集指标和 JSON/Markdown 报告写出。 |
-| `src/test/java/com/embabel/tripper/observability/AgentRunTraceServiceTest.java` | Java 可观测性服务测试，覆盖 action timeline、失败记录、最终 usage/cost 和成本预警。 |
-| `src/test/java/com/embabel/tripper/safety/ContentSafetyServiceTest.java` | Java 内容安全测试，覆盖 prompt injection 检测、敏感信息脱敏、HTML 链接过滤和 URL 安全判断。 |
-| `src/test/java/com/embabel/tripper/safety/ToolSafetyServiceTest.java` | Java 工具安全测试，覆盖 prompt policy 生成和高风险工具组识别。 |
-| `src/test/java/com/embabel/tripper/editing/PlanEditingServiceTest.java` | Java 计划编辑测试，覆盖原始版本创建、单日编辑、全局编辑、diff 和 verifier 重跑。 |
+| `src/test/java/io/github/shibuna/tripsmith/rag/TravelKnowledgeServiceTest.java` | Java RAG 服务测试，验证文档导入、检索、citation 和 prompt context。 |
+| `src/test/java/io/github/shibuna/tripsmith/verification/ItineraryVerificationServiceTest.java` | Java 行程校验测试，覆盖日期缺口、缺失地点、预算、链接、路线和住宿覆盖检查。 |
+| `src/test/java/io/github/shibuna/tripsmith/eval/TravelEvaluationHarnessTest.java` | Java 评测 harness 测试，覆盖数据集规模/维度、CI 子集指标和 JSON/Markdown 报告写出。 |
+| `src/test/java/io/github/shibuna/tripsmith/observability/AgentRunTraceServiceTest.java` | Java 可观测性服务测试，覆盖 action timeline、失败记录、最终 usage/cost 和成本预警。 |
+| `src/test/java/io/github/shibuna/tripsmith/safety/ContentSafetyServiceTest.java` | Java 内容安全测试，覆盖 prompt injection 检测、敏感信息脱敏、HTML 链接过滤和 URL 安全判断。 |
+| `src/test/java/io/github/shibuna/tripsmith/safety/ToolSafetyServiceTest.java` | Java 工具安全测试，覆盖 prompt policy 生成和高风险工具组识别。 |
+| `src/test/java/io/github/shibuna/tripsmith/editing/PlanEditingServiceTest.java` | Java 计划编辑测试，覆盖原始版本创建、单日编辑、全局编辑、diff 和 verifier 重跑。 |
 
 ### 6.11 CI 文件
 
@@ -580,12 +580,12 @@ GitHub Actions CI 配置目录。
 
 | 扩展方向 | 建议新增位置 | 说明 |
 | --- | --- | --- |
-| RAG 知识库 | `src/main/java/com/embabel/tripper/rag` | Java-owned MVP：文档上传、切分、内存 term-vector 检索、citation；后续替换为 embedding/vector store。 |
-| 行程校验器 | `src/main/java/com/embabel/tripper/verification` | Java-owned MVP：日期、预算、路线、链接、住宿一致性校验；后续可替换为 maps-backed verifier。 |
-| Agent 评测 | `src/main/java/com/embabel/tripper/eval` 和 `evals/` | Java-owned MVP：30 条数据集、离线确定性 runner、质量指标、JSON/Markdown 报告；后续接真实 Agent runner 和 LLM judge。 |
-| 可观测性 | `src/main/java/com/embabel/tripper/observability` | Java-owned MVP：action timeline、usage/cost、latency、工具组摘要、成本预警和 `/runs` trace 页面；后续接低层 tool event 和持久化。 |
-| Guardrails | `src/main/java/com/embabel/tripper/safety` | Java-owned MVP：prompt injection 检测、不可信 RAG 包装、工具 policy、敏感信息脱敏、unsafe link 过滤；后续接低层 tool callback allow/block。 |
-| 多轮编辑 | `src/main/java/com/embabel/tripper/editing` | Java-owned MVP：plan version、day-level diff、局部编辑、约束保持、verifier rerun；后续接 LLM-backed rewrite action。 |
+| RAG 知识库 | `src/main/java/io/github/shibuna/tripsmith/rag` | Java-owned MVP：文档上传、切分、内存 term-vector 检索、citation；后续替换为 embedding/vector store。 |
+| 行程校验器 | `src/main/java/io/github/shibuna/tripsmith/verification` | Java-owned MVP：日期、预算、路线、链接、住宿一致性校验；后续可替换为 maps-backed verifier。 |
+| Agent 评测 | `src/main/java/io/github/shibuna/tripsmith/eval` 和 `evals/` | Java-owned MVP：30 条数据集、离线确定性 runner、质量指标、JSON/Markdown 报告；后续接真实 Agent runner 和 LLM judge。 |
+| 可观测性 | `src/main/java/io/github/shibuna/tripsmith/observability` | Java-owned MVP：action timeline、usage/cost、latency、工具组摘要、成本预警和 `/runs` trace 页面；后续接低层 tool event 和持久化。 |
+| Guardrails | `src/main/java/io/github/shibuna/tripsmith/safety` | Java-owned MVP：prompt injection 检测、不可信 RAG 包装、工具 policy、敏感信息脱敏、unsafe link 过滤；后续接低层 tool callback allow/block。 |
+| 多轮编辑 | `src/main/java/io/github/shibuna/tripsmith/editing` | Java-owned MVP：plan version、day-level diff、局部编辑、约束保持、verifier rerun；后续接 LLM-backed rewrite action。 |
 
 ## 9. 本地运行入口
 

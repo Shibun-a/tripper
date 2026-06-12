@@ -1,28 +1,51 @@
 # Project Note
 
-This repository starts from the open-source Embabel Tripper travel-planning agent.
+TripSmith started from the open-source Embabel Tripper travel-planning example and has been
+rebuilt into a production-oriented AI application. This note keeps the boundary between
+upstream work and personal work explicit, because presenting upstream code as original work
+would be dishonest — and because the boundary itself is the clearest map of what this project
+adds.
 
-The current goal of this fork is to evolve the baseline demo into a stronger AI application portfolio project. The original project already provides the Spring Boot/Kotlin web app, Embabel Agent workflow, travel domain model, MCP tool integration, and htmx UI. Personal extensions should be documented explicitly instead of presenting upstream code as original work.
+## Provenance
 
-## Current Personal Additions
+- Upstream project: [Embabel Tripper](https://github.com/embabel/tripper) — the baseline
+  Spring Boot/Kotlin web app, the Embabel Agent workflow skeleton, the travel domain model,
+  MCP tool integration and the htmx UI.
+- Framework: [Embabel Agent Framework](https://github.com/embabel/embabel-agent).
+- License: Apache License 2.0, inherited from upstream. Files derived from upstream retain
+  their original license headers; see `NOTICE`.
+- The codebase now lives under the `io.github.shibuna.tripsmith` namespace. Class names that
+  describe the domain (e.g. `TripperAgent`) were kept where renaming added no clarity.
 
-- `README-AI-APPLICATION-PLAN.md`: staged plan for making the project more suitable for AI application engineering roles.
-- `infra.md`: architecture and file responsibility documentation.
-- `LOCAL-DEVELOPMENT.md`: local setup, environment, test, and run guide.
-- Maven Wrapper files: reproducible Maven usage without requiring a system Maven install.
-- `scripts/demo-plan-request.sh`: repeatable sample form submission against a running local app.
-- Phase 0 cleanup: README port fixes, wrapper-based CI/run commands, and baseline unit assertions.
-- Java-owned Phase 1 RAG MVP under `src/main/java/com/embabel/tripper/rag`, with document import, chunking, retrieval, prompt injection into the Agent workflow, and retrieval debug pages.
-- Java-owned Phase 2 itinerary verifier MVP under `src/main/java/com/embabel/tripper/verification`, with structured verification issues, route/budget/date/link/stay checks, a one-shot Agent repair loop, UI verification summary, and unit tests.
-- Java-owned Phase 3 evaluation MVP under `src/main/java/com/embabel/tripper/eval`, with a 30-case travel dataset, deterministic regression metrics, JSON/Markdown reports, and CI-friendly unit tests.
-- Java-owned Phase 4 observability MVP under `src/main/java/com/embabel/tripper/observability`, with per-run action timelines, final usage/cost capture, cost warnings, and `/runs` trace pages.
-- Java-owned Phase 5 safety MVP under `src/main/java/com/embabel/tripper/safety`, with prompt-injection detection, untrusted RAG context wrapping, tool policy prompts, unsafe-link filtering, and trace redaction.
-- Java-owned Phase 6 editing MVP under `src/main/java/com/embabel/tripper/editing`, with plan versioning, scoped edit notes, day-level diffs, constraint preservation, and verifier reruns after edits.
+## Personal Work (module by module)
 
-## Attribution
+- `agent/` (Kotlin): the original demo agent grew into a verified pipeline and was then
+  decomposed — prompts (`TripPrompts`), deterministic degradation (`FallbackPlans`), a
+  tracing decorator (`ActionTracer`), display-safety post-processing
+  (`PlanHtmlPostProcessor`), model routing and verifier mapping are separate components, and
+  `TripperAgent` keeps orchestration only. Chinese-language runs route to domestic models;
+  plan generation uses a two-call structure/HTML split for weak-JSON models; failed planner
+  calls degrade to deterministic fallbacks instead of failing the run.
+- `rag/`: travel knowledge base with chunking, multilingual local ONNX embeddings, vector
+  retrieval, untrusted-content marking, citation instructions and a retrieval-debug view.
+  SSRF-guarded, size-capped URL imports.
+- `verification/`: deterministic itinerary verifier (date coverage, route estimates from a
+  data-file city catalog, tiered budget checks, link/stay checks) feeding a one-shot LLM
+  repair loop in the agent.
+- `eval/`: two-tier evaluation — a deterministic CI tier exercising the verifier and metrics
+  pipeline over a 30-case dataset, and a gated agent tier (`EVAL_AGENT=true`) that runs the
+  real agent and scores plans with an LLM judge agent.
+- `observability/`: per-run action timelines with cost/token/latency capture, redaction, a
+  bounded store and `/runs` inspection pages.
+- `safety/`: prompt-injection detection for retrieved content, output-side HTML whitelist
+  sanitization, tool policy prompts, URL import guarding and trace redaction.
+- `editing/`: versioned plan-edit sessions with day-scoped notes, diffs and verifier reruns
+  (LLM-backed rewriting is the next step).
+- Persistence: every store sits behind a port with an in-memory adapter (default, zero
+  dependencies) and a JPA adapter plus pgvector index on the `postgres` profile.
+- Engineering: server-side form validation before spend, cost engineering (tool-call caps,
+  research truncation, POI scaling, measured $0.45–0.52/run), CI, tests, and the docs in
+  `LOCAL-DEVELOPMENT.md` / `infra.md` / `README-AI-APPLICATION-PLAN.md`.
 
-- Upstream project: Embabel Tripper.
-- Framework: Embabel Agent Framework.
-- License: Apache License 2.0, as inherited from the upstream project.
-
-Future feature work should keep this distinction clear by documenting which modules are upstream baseline and which modules are personal extensions.
+Future feature work should keep this distinction clear by documenting which modules are
+upstream baseline and which are personal extensions.

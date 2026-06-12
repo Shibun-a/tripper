@@ -1,0 +1,14 @@
+TripSmith
+Copyright 2025-2026 Shibun-a
+
+This product started from the Embabel Tripper example application
+(https://github.com/embabel/tripper), Copyright 2024-2025 Embabel Software, Inc.,
+licensed under the Apache License, Version 2.0.
+
+It is built on the Embabel Agent Framework
+(https://github.com/embabel/embabel-agent), also licensed under the
+Apache License, Version 2.0.
+
+Files derived from the upstream project retain their original Apache
+license headers. See PROJECT-NOTE.md for a module-by-module breakdown
+of upstream versus original work.

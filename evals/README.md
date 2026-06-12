@@ -18,13 +18,13 @@ Phase 3 adds an offline evaluation harness for the travel-planning agent. It is 
 Run the full local evaluation:
 
 ```bash
-./mvnw -q -DskipTests compile exec:java -Dexec.mainClass=com.embabel.tripper.eval.TravelEvaluationCli
+./mvnw -q -DskipTests compile exec:java -Dexec.mainClass=io.github.shibuna.tripsmith.eval.TravelEvaluationCli
 ```
 
 Run a smaller subset:
 
 ```bash
-./mvnw -q -DskipTests compile exec:java -Dexec.mainClass=com.embabel.tripper.eval.TravelEvaluationCli -Dexec.args="--limit 8"
+./mvnw -q -DskipTests compile exec:java -Dexec.mainClass=io.github.shibuna.tripsmith.eval.TravelEvaluationCli -Dexec.args="--limit 8"
 ```
 
 Reports are written to:

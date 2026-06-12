@@ -8,12 +8,12 @@
         <version>3.5.9</version>
         <relativePath/> <!-- Lookup parent from repository -->
     </parent>
-    <groupId>com.embabel.hub</groupId>
-    <artifactId>tripper</artifactId>
+    <groupId>io.github.shibuna</groupId>
+    <artifactId>tripsmith</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>Tripper</name>
-    <description>Travel planner</description>
+    <name>TripSmith</name>
+    <description>Production-oriented AI travel planning agent</description>
 
     <properties>
         <embabel-agent.version>0.3.2-SNAPSHOT</embabel-agent.version>
@@ -42,7 +42,8 @@
             <version>${embabel-agent.version}</version>
         </dependency>
 
-        <!-- Local ONNX embedding model (all-MiniLM-L6-v2) for RAG: offline, free, no cross-border calls -->
+        <!-- Local ONNX embedding model (multilingual paraphrase-MiniLM) for RAG: offline after
+             a one-time download, free, no cross-border calls -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-transformers</artifactId>
@@ -144,7 +145,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <mainClass>com.embabel.tripper.TripperApplicationKt</mainClass>
+                    <mainClass>io.github.shibuna.tripsmith.TripSmithApplicationKt</mainClass>
                 </configuration>
             </plugin>
             <plugin>

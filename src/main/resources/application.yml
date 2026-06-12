@@ -76,51 +76,49 @@ embabel:
               - maps_elevation
               - maps_directions
 
-  tripper:
-    word-count: 600
-    image-width: 850
-    max-concurrency: 4
-    observability:
+tripsmith:
+  word-count: 600
+  image-width: 850
+  max-concurrency: 4
+  observability:
+    enabled: true
+    capture-prompt-content: false
+    max-summary-characters: 240
+    max-runs: 100
+    # A normal run costs ~$0.45 (Chinese/Kimi) to ~$0.52 (English/Claude); 0.15 fired every run
+    # and carried no signal. 0.75 leaves headroom and only flags genuine overruns.
+    cost-warning-threshold-usd: 0.75
+  safety:
+    tools:
       enabled: true
-      capture-prompt-content: false
-      max-summary-characters: 240
-      max-runs: 100
-      # A normal run costs ~$0.45 (Chinese/Kimi) to ~$0.52 (English/Claude); 0.15 fired every run
-      # and carried no signal. 0.75 leaves headroom and only flags genuine overruns.
-      cost-warning-threshold-usd: 0.75
-    safety:
-      tools:
-        enabled: true
-        max-tool-calls-per-action: 8
-        high-risk-tool-groups:
-          - browser
-          - browser_automation
-          - airbnb
+      max-tool-calls-per-action: 8
+      high-risk-tool-groups:
+        - browser
+        - browser_automation
+        - airbnb
 
-    # Anthropic models will give better results but are more expensive
-    thinker-llm:
+  # Anthropic models will give better results but are more expensive
+  thinker-llm:
+    model: claude-sonnet-4-5
+
+  researcher:
+    persona:
+      role: Researcher
+      goal: Research points of interest for a travel plan
+      backstory: >
+        You are an expert researcher who can find interesting stories about art, culture,
+        and famous people associated with places
+    llm:
+      model: claude-haiku-4-5
+
+  planner:
+    persona:
+      name: Hermes
+      persona: You are an expert travel planner
+      voice: friendly and concise
+      objective: Help the user plan an amazing trip, considering their requirements and preferences
+    llm:
       model: claude-sonnet-4-5
-
-    researcher:
-      persona:
-        role: Researcher
-        goal: Research points of interest for a travel plan
-        backstory: >
-          You are an expert researcher who can find interesting stories about art, culture, 
-          and famous people associated with places
-      llm:
-        model: claude-haiku-4-5
-
-
-    planner:
-      persona:
-        name: Hermes
-        persona: You are an expert travel planner
-        voice: friendly and concise
-        objective: Help the user plan an amazing trip, considering their requirements and preferences
-      llm:
-        model: claude-sonnet-4-5
-
 
 logging:
   pattern:

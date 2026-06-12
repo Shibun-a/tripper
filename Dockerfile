@@ -47,4 +47,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:8747/actuator/health || exit 1
 
 # Run the application
-ENTRYPOINT ["java", "-Dmaven.test.skip=true", "-jar", "/app/target/tripper-0.1.0-SNAPSHOT.jar"]
+ENTRYPOINT ["java", "-Dmaven.test.skip=true", "-jar", "/app/target/tripsmith-0.1.0-SNAPSHOT.jar"]

@@ -1,0 +1,16 @@
+package io.github.shibuna.tripsmith.web.support.htmx
+
+import org.springframework.stereotype.Controller
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.RequestMapping
+
+@Controller
+@RequestMapping("/platform")
+class PlatformController(
+) {
+
+    @GetMapping
+    fun home(): String {
+        return "common/platform"
+    }
+}

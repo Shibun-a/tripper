@@ -97,7 +97,7 @@ Resume value:
 
 Current implementation note:
 
-- Phase 1 is implemented as a Java-owned RAG MVP under `src/main/java/com/embabel/tripper/rag`.
+- Phase 1 is implemented as a Java-owned RAG MVP under `src/main/java/io/github/shibuna/tripsmith/rag`.
 - The current retriever is an in-memory term-vector index so the app remains simple and buildable.
 - The next improvement is to replace the retrieval implementation with embeddings and a vector store without changing the Agent integration surface.
 
@@ -130,7 +130,7 @@ Technical requirements:
 
 Current implementation note:
 
-- Phase 2 is implemented as a Java-owned verifier MVP under `src/main/java/com/embabel/tripper/verification`.
+- Phase 2 is implemented as a Java-owned verifier MVP under `src/main/java/io/github/shibuna/tripsmith/verification`.
 - The verifier performs deterministic checks for date coverage, duplicate/out-of-range dates, missing locations, budget mentions, URL syntax, stay coverage, and route estimates.
 - Route estimates use an internal city coordinate catalog and haversine approximation so local tests remain deterministic.
 - The Agent runs a one-shot repair action when blocking verifier errors are found, then verifies the repaired proposal again before accommodation lookup.
@@ -183,7 +183,7 @@ Acceptance criteria:
 
 Current implementation note:
 
-- Phase 3 is implemented as a Java-owned deterministic evaluation MVP under `src/main/java/com/embabel/tripper/eval`.
+- Phase 3 is implemented as a Java-owned deterministic evaluation MVP under `src/main/java/io/github/shibuna/tripsmith/eval`.
 - The dataset lives in `evals/travel-eval-cases.json` and currently contains 30 portfolio-oriented travel cases.
 - The current runner uses `DeterministicEvalPlanCandidateFactory` so CI can evaluate date coverage, budget/link/citation checks, tool-call success, latency, token cost, and verifier issues without real LLM or MCP calls.
 - The next improvement is to add an Agent-backed candidate factory and optional LLM judge so the same dataset can compare prompts, model settings, RAG behavior, and tool orchestration changes.
@@ -223,12 +223,12 @@ Acceptance criteria:
 
 Current implementation note:
 
-- Phase 4 is implemented as a Java-owned AgentOps MVP under `src/main/java/com/embabel/tripper/observability`.
+- Phase 4 is implemented as a Java-owned AgentOps MVP under `src/main/java/io/github/shibuna/tripsmith/observability`.
 - Each web planning run creates an in-memory `AgentRunTrace` keyed by the Embabel `agentProcess.id`.
 - The Agent records action-level timeline events for cost confirmation, knowledge retrieval, POI generation, POI research, plan proposal, verification/repair, accommodation lookup, and HTML post-processing.
 - The final status handler enriches the trace with actual Embabel usage, cost, prompt tokens, completion tokens, and models used.
 - `/runs` lists recent traces and `/runs/{id}` shows action timing, model/tool summaries, prompt/output character counts, final cost, token usage, and warnings.
-- Prompt bodies are not stored by default; the trace records summaries and size metrics. Full prompt capture can be enabled locally with `embabel.tripper.observability.capture-prompt-content=true`.
+- Prompt bodies are not stored by default; the trace records summaries and size metrics. Full prompt capture can be enabled locally with `tripsmith.observability.capture-prompt-content=true`.
 - Automatic model downgrade is intentionally left for a later enhancement after trace data is available.
 
 Resume value:
@@ -262,7 +262,7 @@ Acceptance criteria:
 
 Current implementation note:
 
-- Phase 5 is implemented as a Java-owned safety MVP under `src/main/java/com/embabel/tripper/safety`.
+- Phase 5 is implemented as a Java-owned safety MVP under `src/main/java/io/github/shibuna/tripsmith/safety`.
 - `ContentSafetyService` detects prompt-injection patterns, tool-misuse requests, secret exposure patterns, and unsafe URL schemes.
 - RAG retrieval marks knowledge-source blocks as untrusted, adds safety risk summaries, and uses sanitized prompt text that removes suspicious instruction lines.
 - `ToolSafetyService` contributes per-action tool policy text to Agent prompts, including allowed tool groups and tool-call budget guidance.
@@ -308,7 +308,7 @@ Acceptance criteria:
 
 Current implementation note:
 
-- Phase 6 is implemented as a Java-owned deterministic editing MVP under `src/main/java/com/embabel/tripper/editing`.
+- Phase 6 is implemented as a Java-owned deterministic editing MVP under `src/main/java/io/github/shibuna/tripsmith/editing`.
 - Completed travel plans are saved into an editable session keyed by the Embabel process id.
 - `/plans/{processId}/edit` shows constraints, latest version, verifier status, day-level notes, diff, and version history.
 - Edits can target all days or a selected date. The service preserves original route/date/budget constraints and records the user's instruction as a scoped edit note.

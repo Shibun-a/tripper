@@ -156,7 +156,7 @@ http://localhost:8747/knowledge/debug
 
 Current implementation:
 
-- Java source lives under `src/main/java/com/embabel/tripper/rag`.
+- Java source lives under `src/main/java/io/github/shibuna/tripsmith/rag`.
 - Documents are stored in memory.
 - Text is split into chunks.
 - Retrieval uses a lightweight term-vector cosine similarity index.
@@ -171,7 +171,7 @@ Phase 2 adds a Java-owned itinerary verifier MVP.
 Implementation path:
 
 ```text
-src/main/java/com/embabel/tripper/verification
+src/main/java/io/github/shibuna/tripsmith/verification
 ```
 
 What it checks:
@@ -204,13 +204,13 @@ Phase 3 adds an offline deterministic evaluation harness.
 Run the full evaluation:
 
 ```bash
-./mvnw -q -DskipTests compile exec:java -Dexec.mainClass=com.embabel.tripper.eval.TravelEvaluationCli
+./mvnw -q -DskipTests compile exec:java -Dexec.mainClass=io.github.shibuna.tripsmith.eval.TravelEvaluationCli
 ```
 
 Run a CI-sized subset manually:
 
 ```bash
-./mvnw -q -DskipTests compile exec:java -Dexec.mainClass=com.embabel.tripper.eval.TravelEvaluationCli -Dexec.args="--limit 8"
+./mvnw -q -DskipTests compile exec:java -Dexec.mainClass=io.github.shibuna.tripsmith.eval.TravelEvaluationCli -Dexec.args="--limit 8"
 ```
 
 Outputs:
@@ -223,7 +223,7 @@ target/evals/travel-evaluation-report.md
 Implementation path:
 
 ```text
-src/main/java/com/embabel/tripper/eval
+src/main/java/io/github/shibuna/tripsmith/eval
 evals/travel-eval-cases.json
 ```
 
@@ -253,7 +253,7 @@ The planning and result pages also link to the run trace when a process id is av
 Implementation path:
 
 ```text
-src/main/java/com/embabel/tripper/observability
+src/main/java/io/github/shibuna/tripsmith/observability
 src/main/resources/templates/runs.html
 src/main/resources/templates/run-detail.html
 ```
@@ -261,14 +261,13 @@ src/main/resources/templates/run-detail.html
 Default configuration:
 
 ```yaml
-embabel:
-  tripper:
-    observability:
-      enabled: true
-      capture-prompt-content: false
-      max-summary-characters: 240
-      max-runs: 100
-      cost-warning-threshold-usd: 0.15
+tripsmith:
+  observability:
+    enabled: true
+    capture-prompt-content: false
+    max-summary-characters: 240
+    max-runs: 100
+    cost-warning-threshold-usd: 0.75
 ```
 
 Current limitations:
@@ -284,22 +283,21 @@ Phase 5 adds a Java-owned safety layer for prompt-injection defense, link filter
 Implementation path:
 
 ```text
-src/main/java/com/embabel/tripper/safety
+src/main/java/io/github/shibuna/tripsmith/safety
 ```
 
 Default configuration:
 
 ```yaml
-embabel:
-  tripper:
-    safety:
-      tools:
-        enabled: true
-        max-tool-calls-per-action: 8
-        high-risk-tool-groups:
-          - browser
-          - browser_automation
-          - airbnb
+tripsmith:
+  safety:
+    tools:
+      enabled: true
+      max-tool-calls-per-action: 8
+      high-risk-tool-groups:
+        - browser
+        - browser_automation
+        - airbnb
 ```
 
 Current behavior:
@@ -332,7 +330,7 @@ The final journey page also includes an `Edit This Plan` link when an `agentProc
 Implementation path:
 
 ```text
-src/main/java/com/embabel/tripper/editing
+src/main/java/io/github/shibuna/tripsmith/editing
 src/main/resources/templates/plan-edit.html
 ```
 
