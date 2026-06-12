@@ -36,6 +36,7 @@ import com.embabel.tripper.observability.AgentRunTraceService
 import com.embabel.tripper.rag.TravelKnowledgeContext
 import com.embabel.tripper.rag.TravelKnowledgeService
 import com.embabel.tripper.safety.ContentSafetyService
+import com.embabel.tripper.safety.PlanHtmlSanitizer
 import com.embabel.tripper.safety.ToolSafetyService
 import com.embabel.tripper.util.ImageChecker
 import com.embabel.tripper.verification.ItineraryDay
@@ -103,6 +104,7 @@ class TripperAgent(
     private val itineraryVerificationService: ItineraryVerificationService,
     private val agentRunTraceService: AgentRunTraceService,
     private val contentSafetyService: ContentSafetyService,
+    private val planHtmlSanitizer: PlanHtmlSanitizer,
     private val toolSafetyService: ToolSafetyService,
 ) {
 
@@ -681,6 +683,8 @@ class TripperAgent(
                     plan = StringTransformer.transform(
                         oldPlan, listOf(
                             stripCodeFence,
+                            // Whitelist pass before styleImages so the class attribute it adds survives.
+                            sanitizeHtml,
                             styleImages,
                             removeUnsafeLinks,
                             ImageChecker.removeInvalidImageLinks,
@@ -705,6 +709,10 @@ class TripperAgent(
             .replace(Regex("\\s*```$"), "")
             .trim()
     }
+
+    // Whitelist-sanitize LLM HTML before display: only safe structural tags/attributes and
+    // http(s) URLs survive. This is the output-side counterpart to the input-side RAG checks.
+    private val sanitizeHtml = StringTransformer { html -> planHtmlSanitizer.sanitize(html) }
 
     private val styleImages = StringTransformer { html ->
         html.replace(
