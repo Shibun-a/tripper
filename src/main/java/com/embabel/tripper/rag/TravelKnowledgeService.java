@@ -2,12 +2,17 @@ package com.embabel.tripper.rag;
 
 import com.embabel.tripper.safety.ContentSafetyService;
 import com.embabel.tripper.safety.SafetyAssessment;
+import com.embabel.tripper.safety.UrlImportGuard;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -42,6 +47,7 @@ public class TravelKnowledgeService {
     private final TravelKnowledgeRepository repository;
     private final RestClient restClient;
     private final ContentSafetyService contentSafetyService;
+    private final UrlImportGuard urlImportGuard;
     private final VectorStore vectorStore;
     private final RagProperties properties;
 
@@ -49,12 +55,14 @@ public class TravelKnowledgeService {
             TravelKnowledgeRepository repository,
             RestClient restClient,
             ContentSafetyService contentSafetyService,
+            UrlImportGuard urlImportGuard,
             VectorStore vectorStore,
             RagProperties properties
     ) {
         this.repository = repository;
         this.restClient = restClient;
         this.contentSafetyService = contentSafetyService;
+        this.urlImportGuard = urlImportGuard;
         this.vectorStore = vectorStore;
         this.properties = properties;
     }
@@ -89,20 +97,42 @@ public class TravelKnowledgeService {
             String url,
             String title
     ) {
-        String raw = restClient.get()
+        urlImportGuard.requireFetchable(url);
+        byte[] rawBytes = restClient.get()
                 .uri(url)
-                .retrieve()
-                .body(String.class);
-        if (raw == null) {
+                .exchange((request, response) -> {
+                    if (!response.getStatusCode().is2xxSuccessful()) {
+                        // Redirects land here too: the client never follows them, because a
+                        // redirect target would bypass the SSRF host check above.
+                        throw new IllegalStateException(
+                                "URL returned status " + response.getStatusCode() + ": " + url);
+                    }
+                    return readBounded(response.getBody(), properties.getMaxUrlImportBytes());
+                });
+        if (rawBytes == null || rawBytes.length == 0) {
             throw new IllegalStateException("No response body from " + url);
         }
-        String text = htmlToText(raw);
+        String text = htmlToText(new String(rawBytes, StandardCharsets.UTF_8));
         return addDocument(
                 isBlank(title) ? url : title,
                 TravelKnowledgeSourceType.URL,
                 url,
                 text
         );
+    }
+
+    private byte[] readBounded(InputStream body, int maxBytes) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int read;
+        while ((read = body.read(buffer)) != -1) {
+            out.write(buffer, 0, read);
+            if (out.size() > maxBytes) {
+                throw new IllegalArgumentException(
+                        "URL content exceeds the import limit of " + maxBytes + " bytes");
+            }
+        }
+        return out.toByteArray();
     }
 
     public List<TravelKnowledgeDocument> documents() {

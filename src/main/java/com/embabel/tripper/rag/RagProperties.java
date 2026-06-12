@@ -24,6 +24,12 @@ public class RagProperties {
      */
     private double similarityThreshold = 0.0;
 
+    /**
+     * Upper bound in bytes for a URL import response body. The body is read incrementally and
+     * the import aborts past this limit, so a huge page cannot exhaust memory.
+     */
+    private int maxUrlImportBytes = 2_000_000;
+
     public int getChunkSizeWords() {
         return chunkSizeWords;
     }
@@ -54,5 +60,13 @@ public class RagProperties {
 
     public void setSimilarityThreshold(double similarityThreshold) {
         this.similarityThreshold = similarityThreshold;
+    }
+
+    public int getMaxUrlImportBytes() {
+        return maxUrlImportBytes;
+    }
+
+    public void setMaxUrlImportBytes(int maxUrlImportBytes) {
+        this.maxUrlImportBytes = maxUrlImportBytes;
     }
 }

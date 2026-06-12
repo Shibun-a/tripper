@@ -2,6 +2,7 @@ package com.embabel.tripper.rag;
 
 import com.embabel.tripper.safety.ContentSafetyService;
 import com.embabel.tripper.safety.SensitiveDataRedactor;
+import com.embabel.tripper.safety.UrlImportGuard;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -24,6 +25,7 @@ class TravelKnowledgeServiceTest {
                 new TravelKnowledgeRepository(),
                 RestClient.create(),
                 new ContentSafetyService(new SensitiveDataRedactor()),
+                new UrlImportGuard(),
                 vectorStore,
                 new RagProperties()
         );
