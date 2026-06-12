@@ -1,5 +1,6 @@
 package com.embabel.tripper.verification;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayDeque;
@@ -11,13 +12,15 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Repository
-public class PlanVerificationRepository {
+@Profile("!postgres")
+public class PlanVerificationRepository implements PlanVerificationResultStore {
 
     private static final int MAX_RESULTS = 100;
 
     private final Map<String, PlanVerificationResult> results = new ConcurrentHashMap<>();
     private final Deque<String> resultOrder = new ArrayDeque<>();
 
+    @Override
     public synchronized PlanVerificationResult save(PlanVerificationResult result) {
         results.put(result.getId(), result);
         resultOrder.remove(result.getId());
@@ -29,10 +32,12 @@ public class PlanVerificationRepository {
         return result;
     }
 
+    @Override
     public synchronized Optional<PlanVerificationResult> findById(String id) {
         return Optional.ofNullable(results.get(id));
     }
 
+    @Override
     public synchronized List<PlanVerificationResult> findRecent() {
         List<PlanVerificationResult> recent = new ArrayList<>();
         for (String id : resultOrder) {

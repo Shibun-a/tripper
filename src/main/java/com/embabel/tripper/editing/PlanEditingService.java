@@ -17,11 +17,11 @@ import java.util.Optional;
 @Service
 public class PlanEditingService {
 
-    private final PlanEditingRepository repository;
+    private final PlanEditSessionStore repository;
     private final ItineraryVerificationService verificationService;
 
     public PlanEditingService(
-            PlanEditingRepository repository,
+            PlanEditSessionStore repository,
             ItineraryVerificationService verificationService
     ) {
         this.repository = repository;

@@ -10,12 +10,12 @@ import java.util.Optional;
 @Service
 public class AgentRunTraceService {
 
-    private final AgentRunTraceRepository repository;
+    private final AgentRunTraceStore repository;
     private final AgentRunObservabilityProperties properties;
     private final SensitiveDataRedactor redactor;
 
     public AgentRunTraceService(
-            AgentRunTraceRepository repository,
+            AgentRunTraceStore repository,
             AgentRunObservabilityProperties properties,
             SensitiveDataRedactor redactor
     ) {

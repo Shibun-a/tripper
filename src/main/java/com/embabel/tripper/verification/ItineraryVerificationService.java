@@ -31,10 +31,10 @@ public class ItineraryVerificationService {
             "(?i)(?:\\$|usd\\s*)(\\d{2,5})(?:\\.\\d{1,2})?"
     );
 
-    private final PlanVerificationRepository repository;
+    private final PlanVerificationResultStore repository;
     private final Map<String, Coordinate> cityCoordinates;
 
-    public ItineraryVerificationService(PlanVerificationRepository repository) {
+    public ItineraryVerificationService(PlanVerificationResultStore repository) {
         this.repository = repository;
         this.cityCoordinates = loadCityCatalog();
     }

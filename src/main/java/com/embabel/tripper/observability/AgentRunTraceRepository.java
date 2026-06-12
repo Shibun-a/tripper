@@ -1,5 +1,6 @@
 package com.embabel.tripper.observability;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
 import java.util.Comparator;
@@ -11,23 +12,27 @@ import java.util.Optional;
 /**
  * In-memory trace store. All mutation happens inside synchronized methods and readers get deep
  * snapshots, so agent threads appending events and web threads rendering /runs never share a
- * mutable trace. These method shapes are the persistence port for a database-backed tier.
+ * mutable trace. The postgres profile swaps in the JPA-backed adapter instead.
  */
 @Repository
-public class AgentRunTraceRepository {
+@Profile("!postgres")
+public class AgentRunTraceRepository implements AgentRunTraceStore {
 
     private final Map<String, AgentRunTrace> traces = new LinkedHashMap<>();
 
     /** Register a freshly created trace (overwrites a same-id placeholder). */
+    @Override
     public synchronized AgentRunTrace save(AgentRunTrace trace) {
         traces.put(trace.getRunId(), trace);
         return trace;
     }
 
+    @Override
     public synchronized void appendEvent(String runId, AgentRunTraceEvent event) {
         traces.computeIfAbsent(runId, AgentRunTrace::unregistered).addEvent(event);
     }
 
+    @Override
     public synchronized void completeEvent(
             String runId,
             String eventId,
@@ -37,10 +42,12 @@ public class AgentRunTraceRepository {
         liveEvent(runId, eventId).ifPresent(event -> event.complete(outputSummary, completionCharacters));
     }
 
+    @Override
     public synchronized void failEvent(String runId, String eventId, String errorMessage) {
         liveEvent(runId, eventId).ifPresent(event -> event.fail(errorMessage));
     }
 
+    @Override
     public synchronized void completeRun(
             String runId,
             AgentRunStatus status,
@@ -54,10 +61,12 @@ public class AgentRunTraceRepository {
                 .complete(status, costUsd, promptTokens, completionTokens, modelsUsed, warnings);
     }
 
+    @Override
     public synchronized Optional<AgentRunTrace> findByRunId(String runId) {
         return Optional.ofNullable(traces.get(runId)).map(AgentRunTrace::snapshot);
     }
 
+    @Override
     public synchronized List<AgentRunTrace> findRecent() {
         return traces.values().stream()
                 .sorted(Comparator.comparing(AgentRunTrace::getCreatedAt).reversed())
@@ -65,6 +74,7 @@ public class AgentRunTraceRepository {
                 .toList();
     }
 
+    @Override
     public synchronized void pruneToSize(int maxRuns) {
         if (maxRuns <= 0 || traces.size() <= maxRuns) {
             return;
@@ -77,6 +87,7 @@ public class AgentRunTraceRepository {
         oldestRunIds.forEach(traces::remove);
     }
 
+    @Override
     public synchronized void clear() {
         traces.clear();
     }

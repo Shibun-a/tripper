@@ -44,7 +44,7 @@ public class TravelKnowledgeService {
     private static final String META_SOURCE = "source";
     private static final String META_CHUNK_INDEX = "chunkIndex";
 
-    private final TravelKnowledgeRepository repository;
+    private final TravelKnowledgeDocumentStore repository;
     private final RestClient restClient;
     private final ContentSafetyService contentSafetyService;
     private final UrlImportGuard urlImportGuard;
@@ -52,7 +52,7 @@ public class TravelKnowledgeService {
     private final RagProperties properties;
 
     public TravelKnowledgeService(
-            TravelKnowledgeRepository repository,
+            TravelKnowledgeDocumentStore repository,
             RestClient restClient,
             ContentSafetyService contentSafetyService,
             UrlImportGuard urlImportGuard,

@@ -1,5 +1,6 @@
 package com.embabel.tripper.rag;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
@@ -13,11 +14,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * live in the {@link org.springframework.ai.vectorstore.VectorStore}.
  */
 @Repository
-public class TravelKnowledgeRepository {
+@Profile("!postgres")
+public class TravelKnowledgeRepository implements TravelKnowledgeDocumentStore {
 
     private final ConcurrentHashMap<String, TravelKnowledgeDocument> documents = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, List<String>> chunkIdsByDocument = new ConcurrentHashMap<>();
 
+    @Override
     public TravelKnowledgeDocument save(
             TravelKnowledgeDocument document,
             List<String> chunkIds
@@ -27,18 +30,21 @@ public class TravelKnowledgeRepository {
         return document;
     }
 
+    @Override
     public List<TravelKnowledgeDocument> findAllDocuments() {
         return documents.values().stream()
                 .sorted(Comparator.comparing(TravelKnowledgeDocument::getCreatedAt).reversed())
                 .toList();
     }
 
+    @Override
     public List<String> allChunkIds() {
         List<String> ids = new ArrayList<>();
         chunkIdsByDocument.values().forEach(ids::addAll);
         return ids;
     }
 
+    @Override
     public void clear() {
         documents.clear();
         chunkIdsByDocument.clear();
