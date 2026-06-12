@@ -172,6 +172,27 @@ data class Stay(
 }
 
 /**
+ * Group days into stays by consecutive runs of the same city. A plain groupBy on city would
+ * merge a return visit (e.g. Paris → Lyon → Paris) into a single stay whose dates span the
+ * days spent elsewhere, producing a wrong accommodation search window.
+ */
+fun consecutiveStays(days: List<Day>): List<Stay> {
+    val stays = mutableListOf<Stay>()
+    var run = mutableListOf<Day>()
+    for (day in days.sortedBy { it.date }) {
+        if (run.isNotEmpty() && run.last().stayingAt != day.stayingAt) {
+            stays.add(Stay(days = run))
+            run = mutableListOf()
+        }
+        run.add(day)
+    }
+    if (run.isNotEmpty()) {
+        stays.add(Stay(days = run))
+    }
+    return stays
+}
+
+/**
  * Note created by an LLM but assembled in code.
  */
 data class TravelPlan(

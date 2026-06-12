@@ -598,12 +598,7 @@ class TripperAgent(
         context: OperationContext,
     ): TravelPlan {
         val plan = verifiedProposal.proposal
-        // Sanitize the content to ensure it is safe for display
-        val stays = plan.days.groupBy { it.stayingAt }.map { (stayingAt, days) ->
-            Stay(
-                days = days,
-            )
-        }.sortedBy { it.days.first().date }
+        val stays = consecutiveStays(plan.days)
         val dailyAccommodationBudget = brief.dailyBudget / 2.0
         val estimatedPromptCharacters = stays.sumOf { stay ->
             360 + stay.stayingAt().length + stay.days.size * 12

@@ -20,6 +20,7 @@ import com.embabel.tripper.agent.JourneyTravelBrief
 import com.embabel.tripper.agent.ProposedTravelPlan
 import com.embabel.tripper.agent.TravelPlan
 import com.embabel.tripper.agent.Travelers
+import com.embabel.tripper.agent.consecutiveStays
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import java.time.LocalDate
@@ -71,6 +72,43 @@ class TravelPlanTest {
                 "https://www.google.com/maps/dir/Paris%2C%2BFrance/Dijon%2C%2BFrance/Beaune%2C%2BFrance",
                 travelPlan.journeyMapUrl,
             )
+        }
+    }
+
+    @Nested
+    inner class StayGrouping {
+
+        @Test
+        fun `keeps return visits as separate stays`() {
+            val days = listOf(
+                Day(LocalDate.of(2020, 1, 1), "Paris,+France"),
+                Day(LocalDate.of(2020, 1, 2), "Paris,+France"),
+                Day(LocalDate.of(2020, 1, 3), "Lyon,+France"),
+                Day(LocalDate.of(2020, 1, 4), "Paris,+France"),
+            )
+
+            val stays = consecutiveStays(days)
+
+            assertEquals(3, stays.size)
+            assertEquals(listOf("Paris", "Lyon", "Paris"), stays.map { it.stayingAt() })
+            // The first Paris stay must end before Lyon; the return visit is its own stay.
+            assertEquals(LocalDate.of(2020, 1, 2), stays[0].days.last().date)
+            assertEquals(listOf(LocalDate.of(2020, 1, 4)), stays[2].days.map { it.date })
+        }
+
+        @Test
+        fun `sorts days and keeps a single-city trip as one stay`() {
+            val days = listOf(
+                Day(LocalDate.of(2020, 1, 3), "Dijon,+France"),
+                Day(LocalDate.of(2020, 1, 1), "Dijon,+France"),
+                Day(LocalDate.of(2020, 1, 2), "Dijon,+France"),
+            )
+
+            val stays = consecutiveStays(days)
+
+            assertEquals(1, stays.size)
+            assertEquals(LocalDate.of(2020, 1, 1), stays.single().days.first().date)
+            assertEquals(LocalDate.of(2020, 1, 3), stays.single().days.last().date)
         }
     }
 
