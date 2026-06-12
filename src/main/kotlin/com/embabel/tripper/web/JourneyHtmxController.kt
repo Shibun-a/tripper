@@ -23,6 +23,7 @@ import com.embabel.agent.web.htmx.GenericProcessingValues
 import com.embabel.tripper.agent.JourneyTravelBrief
 import com.embabel.tripper.agent.Traveler
 import com.embabel.tripper.agent.Travelers
+import com.embabel.tripper.agent.TripperAgent
 import com.embabel.tripper.agent.TripperConfig
 import com.embabel.tripper.observability.AgentRunTraceService
 import org.springframework.context.MessageSource
@@ -121,8 +122,12 @@ class JourneyHtmxController(
         }
         val travelers = Travelers(travelers = travelersList)
 
-        val agent = agentPlatform.agents().singleOrNull { it.name.lowercase().contains("trip") }
-            ?: error("No travel agent found. Please ensure the tripper agent is registered.")
+        // Prefer an exact type-name match: a loose "trip" substring would also match any other
+        // agent deployed on the same platform (e.g. the eval judge).
+        val agents = agentPlatform.agents()
+        val agent = agents.singleOrNull { it.name.equals(TripperAgent::class.simpleName, ignoreCase = true) }
+            ?: agents.singleOrNull { it.name.contains("tripper", ignoreCase = true) }
+            ?: error("No travel agent found. Please ensure the TripperAgent is registered.")
 
         val agentProcess = agentPlatform.createAgentProcessFrom(
             agent = agent,

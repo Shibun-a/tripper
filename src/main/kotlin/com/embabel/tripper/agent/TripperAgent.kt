@@ -21,22 +21,15 @@ import com.embabel.agent.api.common.SomeOf
 import com.embabel.agent.api.common.create
 import com.embabel.agent.core.CoreToolGroups
 import com.embabel.agent.core.last
-import com.embabel.agent.domain.library.InternetResource
 import com.embabel.agent.prompt.ResponseFormat
 import com.embabel.common.ai.model.LlmOptions
-import com.embabel.common.util.StringTransformer
 import com.embabel.tripper.BraveImageSearchService
 import com.embabel.tripper.config.ToolsConfig
-import com.embabel.tripper.observability.AgentRunTraceService
 import com.embabel.tripper.rag.TravelKnowledgeContext
 import com.embabel.tripper.rag.TravelKnowledgeService
-import com.embabel.tripper.safety.ContentSafetyService
-import com.embabel.tripper.safety.PlanHtmlSanitizer
 import com.embabel.tripper.safety.ToolSafetyService
-import com.embabel.tripper.util.ImageChecker
 import com.embabel.tripper.verification.ItineraryVerificationService
 import org.slf4j.LoggerFactory
-import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.CancellationException
 import java.util.concurrent.atomic.AtomicInteger
@@ -55,11 +48,10 @@ class TripperAgent(
     private val braveImageSearch: BraveImageSearchService,
     private val travelKnowledgeService: TravelKnowledgeService,
     private val itineraryVerificationService: ItineraryVerificationService,
-    private val agentRunTraceService: AgentRunTraceService,
-    private val contentSafetyService: ContentSafetyService,
-    private val planHtmlSanitizer: PlanHtmlSanitizer,
     private val toolSafetyService: ToolSafetyService,
     private val fallbackPlans: FallbackPlans,
+    private val planHtmlPostProcessor: PlanHtmlPostProcessor,
+    private val tracer: ActionTracer,
 ) {
 
     private val logger = LoggerFactory.getLogger(TripperAgent::class.java)
@@ -76,7 +68,7 @@ class TripperAgent(
         travelers: Travelers,
         context: OperationContext
     ): AcceptanceOfCost {
-        return tracedAction(
+        return tracer.traced(
             context = context,
             actionName = "confirmExpensiveOperation",
             inputSummary = "travelers=${travelers.travelers.size}, route=${travelBrief.from}->${travelBrief.to}, dailyBudget=${travelBrief.dailyBudget}",
@@ -86,7 +78,7 @@ class TripperAgent(
             val confirmationNeeded = context.last<TravelersAndBrief>() != null
             if (!confirmationNeeded) {
                 // Take it as a given
-                return@tracedAction AcceptanceOfCost
+                return@traced AcceptanceOfCost
             }
             // Otherwise, explicitly ask the user for confirmation. The ceiling is config-driven
             // (estimatedMaxCostUsd) and the wording follows the user's chosen language.
@@ -108,7 +100,7 @@ class TripperAgent(
         travelers: Travelers,
         context: OperationContext,
     ): TravelKnowledgeContext {
-        return tracedAction(
+        return tracer.traced(
             context = context,
             actionName = "retrieveTravelKnowledge",
             inputSummary = "briefCharacters=${travelBrief.brief.length}, travelers=${travelers.travelers.size}",
@@ -145,7 +137,7 @@ class TripperAgent(
             knowledgeContext = knowledgeContext,
             maxPois = maxPois,
         )
-        return tracedAction(
+        return tracer.traced(
             context = context,
             actionName = "findPointsOfInterest",
             inputSummary = "route=${travelBrief.from}->${travelBrief.to}, knowledgeHits=${knowledgeContext.hits.size}",
@@ -187,7 +179,7 @@ class TripperAgent(
             520 + travelBrief.brief.length + it.name.length + it.description.length +
                     it.location.length + knowledgeContext.contribution().length
         }
-        return tracedAction(
+        return tracer.traced(
             context = context,
             actionName = "researchPointsOfInterest",
             inputSummary = "pointsOfInterest=${itineraryIdeas.pointsOfInterest.size}, maxConcurrency=${config.maxConcurrency}",
@@ -276,7 +268,7 @@ class TripperAgent(
         val poiSummary = TripPrompts.poiSummary(poiFindings, config.researchSummaryCharacters)
         val structurePrompt = TripPrompts.planStructure(travelBrief, poiSummary)
 
-        return tracedAction(
+        return tracer.traced(
             context = context,
             actionName = "proposeTravelPlan",
             inputSummary = "poiFindings=${poiFindings.pointsOfInterest.size}, knowledgeHits=${knowledgeContext.hits.size}",
@@ -346,7 +338,7 @@ class TripperAgent(
         // and the two-call split (structure JSON + plain-text HTML) keeps it reliable on domestic
         // OpenAI-compatible models that produce HTML-in-JSON unreliably.
         val toolNames = emptyList<String>()
-        return tracedAction(
+        return tracer.traced(
             context = context,
             actionName = "verifyAndRepairTravelPlan",
             inputSummary = "days=${proposedPlan.days.size}, links=${proposedPlan.pageLinks.size + proposedPlan.imageLinks.size + proposedPlan.videoLinks.size}",
@@ -363,7 +355,7 @@ class TripperAgent(
             )
             val verification = itineraryVerificationService.verifyProposal(verificationRequest)
             if (!verification.isHasErrors()) {
-                return@tracedAction VerifiedTravelPlanProposal(proposedPlan, verification)
+                return@traced VerifiedTravelPlanProposal(proposedPlan, verification)
             }
 
             logger.warn(
@@ -435,7 +427,7 @@ class TripperAgent(
         }
         val toolNames = listOf(ToolsConfig.AIRBNB, CoreToolGroups.MATH)
 
-        return tracedAction(
+        return tracer.traced(
             context = context,
             actionName = "findPlacesToSleep",
             inputSummary = "stays=${stays.size}, dailyAccommodationBudget=$dailyAccommodationBudget",
@@ -495,112 +487,18 @@ class TripperAgent(
         plan: TravelPlan,
         context: OperationContext,
     ): TravelPlan {
-        return tracedAction(
+        return tracer.traced(
             context = context,
             actionName = "postProcessHtml",
             inputSummary = "htmlCharacters=${plan.proposal.plan.length}, imageLinks=${plan.proposal.imageLinks.size}",
             outputSummary = { "htmlCharacters=${it.proposal.plan.length}" },
             completionCharacters = { it.proposal.plan.length },
         ) {
-            val oldPlan = plan.proposal.plan
-            plan.copy(
-                proposal = plan.proposal.copy(
-                    plan = StringTransformer.transform(
-                        oldPlan, listOf(
-                            stripCodeFence,
-                            // Whitelist pass before styleImages so the class attribute it adds survives.
-                            sanitizeHtml,
-                            styleImages,
-                            removeUnsafeLinks,
-                            ImageChecker.removeInvalidImageLinks,
-                        )
-                    ),
-                    pageLinks = safeResources(plan.proposal.pageLinks),
-                    imageLinks = safeResources(plan.proposal.imageLinks),
-                    videoLinks = safeResources(plan.proposal.videoLinks),
-                ),
-                stays = plan.stays.map { stay ->
-                    stay.copy(airbnbUrl = contentSafetyService.safeUrlOrNull(stay.airbnbUrl))
-                },
-            )
-        }
-    }
-
-    // Some models (e.g. via generateText) wrap the HTML body in a ```html ... ``` markdown fence;
-    // strip it so the literal backticks do not show in the rendered plan.
-    private val stripCodeFence = StringTransformer { html ->
-        html.trim()
-            .replace(Regex("^```[a-zA-Z]*\\s*"), "")
-            .replace(Regex("\\s*```$"), "")
-            .trim()
-    }
-
-    // Whitelist-sanitize LLM HTML before display: only safe structural tags/attributes and
-    // http(s) URLs survive. This is the output-side counterpart to the input-side RAG checks.
-    private val sanitizeHtml = StringTransformer { html -> planHtmlSanitizer.sanitize(html) }
-
-    private val styleImages = StringTransformer { html ->
-        html.replace(
-            "<img",
-            "<img class=\"styled-image-thick\""
-        )
-    }
-
-    private val removeUnsafeLinks = StringTransformer { html ->
-        contentSafetyService.sanitizeHtmlLinks(html)
-    }
-
-    private fun safeResources(resources: List<InternetResource>): List<InternetResource> =
-        resources
-            .filter { contentSafetyService.isSafeHttpUrl(it.url) }
-            .map { InternetResource(it.url, it.summary) }
-
-    private fun <T> tracedAction(
-        context: OperationContext,
-        actionName: String,
-        inputSummary: String,
-        modelName: String? = null,
-        promptCharacters: Int? = null,
-        toolNames: List<String> = emptyList(),
-        outputSummary: (T) -> String,
-        completionCharacters: (T) -> Int? = { null },
-        block: () -> T,
-    ): T {
-        val runId = context.agentProcess.id
-        val eventId = agentRunTraceService.startAction(
-            runId,
-            actionName,
-            inputSummary,
-            modelName,
-            promptCharacters,
-            toolNames,
-        )
-        return try {
-            val result = block()
-            agentRunTraceService.completeAction(
-                runId,
-                eventId,
-                outputSummary(result),
-                completionCharacters(result),
-            )
-            result
-        } catch (ex: RuntimeException) {
-            agentRunTraceService.failAction(runId, eventId, ex.message ?: ex::class.simpleName)
-            throw ex
-        } catch (ex: Error) {
-            agentRunTraceService.failAction(runId, eventId, ex.message ?: ex::class.simpleName)
-            throw ex
+            planHtmlPostProcessor.process(plan)
         }
     }
 
 }
-
-/**
- * Used for an LLM return
- */
-private data class AirbnbResultsLlmReturn(
-    val searchUrl: String,
-)
 
 /**
  * Extending SomeOf causes both Travelers and JourneyTravelBrief to be bound to the blackboard
